@@ -4,21 +4,29 @@ import { WalletBalance, Transaction, User, Card } from '@/types/wallet';
 import { toast } from '@/hooks/use-toast';
 
 // Transform backend transaction to frontend format
-function transformTransaction(tx: any, currentWalletId?: string): Transaction {
+function transformTransaction(tx: any): Transaction {
+  // Use is_outgoing to determine the correct type for display
+  // Backend always stores 'send' type, but we show 'receive' for the recipient
+  const isOutgoing = tx.is_outgoing;
+  const displayType = isOutgoing ? 'send' : 'receive';
+  
+  // For outgoing: show recipient. For incoming: show sender
+  const displayPerson = isOutgoing ? tx.recipient : tx.sender;
+  
   return {
     id: tx.id,
-    type: tx.type,
+    type: displayType as Transaction['type'],
     amount: tx.amount,
-    status: tx.status === 'pending_confirmation' ? 'pending' : tx.status,
+    status: tx.status,
     description: tx.description,
-    recipient: tx.recipient ? {
+    recipient: isOutgoing && tx.recipient ? {
       id: tx.recipient.id,
       name: tx.recipient.name,
       username: tx.recipient.username,
       email: tx.recipient.email,
       phone: tx.recipient.phone,
     } : undefined,
-    sender: tx.sender ? {
+    sender: !isOutgoing && tx.sender ? {
       id: tx.sender.id,
       name: tx.sender.name,
       username: tx.sender.username,
