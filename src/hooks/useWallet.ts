@@ -5,14 +5,25 @@ import { toast } from '@/hooks/use-toast';
 
 // Transform backend transaction to frontend format
 function transformTransaction(tx: any): Transaction {
+  // Handle deposit/withdrawal types separately - they don't have counterparties
+  if (tx.type === 'deposit' || tx.type === 'withdrawal') {
+    return {
+      id: tx.id,
+      type: tx.type as Transaction['type'],
+      amount: tx.amount,
+      status: tx.status,
+      description: tx.description,
+      recipient: undefined,
+      sender: undefined,
+      createdAt: new Date(tx.created_at),
+      isRisky: tx.is_risky,
+    };
+  }
+
   // Use is_outgoing to determine the correct type for display
   // Backend always stores 'send' type, but we show 'receive' for the recipient
   const isOutgoing = tx.is_outgoing === true;
   const displayType = isOutgoing ? 'send' : 'receive';
-  
-  // For outgoing transactions: the current user is sender, show recipient info
-  // For incoming transactions: the current user is recipient, show sender info
-  // We need to pass both to the Transaction object so UI can choose correctly
   
   // Get the counterparty (the other person in the transaction)
   const counterparty = isOutgoing ? tx.recipient : tx.sender;

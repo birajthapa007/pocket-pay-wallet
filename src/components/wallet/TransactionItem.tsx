@@ -26,6 +26,8 @@ const TransactionItem = React.forwardRef<HTMLDivElement, TransactionItemProps>(
     const getIcon = () => {
       if (type === 'send') return ArrowUpRight;
       if (type === 'receive') return ArrowDownLeft;
+      if (type === 'deposit') return Building;
+      if (type === 'withdrawal') return ArrowUpRight;
       if (type === 'request') return HandCoins;
       return Building;
     };
@@ -36,7 +38,8 @@ const TransactionItem = React.forwardRef<HTMLDivElement, TransactionItemProps>(
       if (status === 'pending_confirmation') return 'bg-warning-soft text-warning';
       // Then type-based styling
       if (type === 'send') return 'bg-secondary text-foreground';
-      if (type === 'receive') return 'bg-success-soft text-success';
+      if (type === 'receive' || type === 'deposit') return 'bg-success-soft text-success';
+      if (type === 'withdrawal') return 'bg-warning-soft text-warning';
       if (type === 'request') return 'bg-info-soft text-info';
       return 'bg-secondary text-foreground';
     };
@@ -44,7 +47,8 @@ const TransactionItem = React.forwardRef<HTMLDivElement, TransactionItemProps>(
     const getAmountStyle = () => {
       if (status === 'blocked') return 'text-destructive line-through';
       if (status === 'pending_confirmation') return 'text-warning';
-      if (type === 'receive') return 'text-success';
+      if (type === 'receive' || type === 'deposit') return 'text-success';
+      if (type === 'withdrawal') return 'text-warning';
       return 'text-foreground';
     };
 
@@ -97,7 +101,11 @@ const TransactionItem = React.forwardRef<HTMLDivElement, TransactionItemProps>(
     };
 
     const Icon = getIcon();
-    const personName = type === 'send' ? recipient?.name : sender?.name;
+    // For deposit/withdrawal, show description; for transfers, show person name
+    const personName = type === 'deposit' || type === 'withdrawal' 
+      ? null 
+      : (type === 'send' ? recipient?.name : sender?.name);
+    const displayTitle = personName || (type === 'deposit' ? 'Bank Deposit' : type === 'withdrawal' ? 'Bank Withdrawal' : description);
 
     return (
       <div 
@@ -124,7 +132,7 @@ const TransactionItem = React.forwardRef<HTMLDivElement, TransactionItemProps>(
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <p className="font-medium truncate text-foreground">
-              {personName || description}
+              {displayTitle}
             </p>
             {getStatusBadge()}
           </div>
@@ -136,9 +144,9 @@ const TransactionItem = React.forwardRef<HTMLDivElement, TransactionItemProps>(
         <div className="text-right flex-shrink-0 flex items-center gap-2">
           <div>
             <p className={cn('font-semibold', getAmountStyle())}>
-              {type === 'receive' ? '+' : '-'}{formatCurrency(amount)}
+              {(type === 'receive' || type === 'deposit') ? '+' : '-'}{formatCurrency(amount)}
             </p>
-            {personName && (
+            {(personName || type === 'deposit' || type === 'withdrawal') && (
               <p className="text-xs text-muted-foreground">
                 {formatRelativeTime(createdAt)}
               </p>

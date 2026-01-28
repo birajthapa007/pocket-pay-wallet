@@ -82,7 +82,9 @@ const TransactionDetailScreen = React.forwardRef<HTMLDivElement, TransactionDeta
         case 'receive':
           return { icon: ArrowDownLeft, label: 'Received', color: 'text-success' };
         case 'deposit':
-          return { icon: Building, label: 'Deposit', color: 'text-primary' };
+          return { icon: Building, label: 'Deposit', color: 'text-success' };
+        case 'withdrawal':
+          return { icon: ArrowUpRight, label: 'Withdrawal', color: 'text-warning' };
         case 'request':
           return { icon: HandCoins, label: 'Requested', color: 'text-info' };
         default:
@@ -188,7 +190,7 @@ const TransactionDetailScreen = React.forwardRef<HTMLDivElement, TransactionDeta
             "text-4xl font-bold",
             status === 'blocked' ? 'text-destructive line-through' : typeConfig.color
           )}>
-            {type === 'receive' ? '+' : '-'}{formatCurrency(amount)}
+            {(type === 'receive' || type === 'deposit') ? '+' : '-'}{formatCurrency(amount)}
           </p>
         </div>
 
