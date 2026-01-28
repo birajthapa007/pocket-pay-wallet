@@ -34,6 +34,7 @@ function getAllowedOrigins(): string[] {
   
   // Always allow the preview and production Lovable domains
   origins.push('https://id-preview--bf010dab-705c-43c8-aeec-b4776f85a038.lovable.app')
+  origins.push('https://bf010dab-705c-43c8-aeec-b4776f85a038.lovableproject.com')
   
   // Add custom domain if configured
   const customOrigin = Deno.env.get('ALLOWED_ORIGIN')
