@@ -1,29 +1,24 @@
 // =========================================
 // POCKET PAY - TRANSFER OPERATIONS
 // Send money, confirm risky transfers, process payments
-// Ledger-based, intent-driven architecture
+// Ledger-based, intent-driven architecture with atomic operations
 // =========================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-}
-
-interface TransferRequest {
-  recipient_wallet_id: string
-  amount: number
-  description: string
-}
-
-interface ConfirmRequest {
-  transaction_id: string
-}
+import { getCorsHeaders, handleCorsPreflightRequest } from '../_shared/cors.ts'
+import { 
+  isValidUUID,
+  validateAmount, 
+  validateDescription,
+  validationError
+} from '../_shared/validation.ts'
 
 Deno.serve(async (req) => {
+  const requestOrigin = req.headers.get('Origin')
+  const corsHeaders = getCorsHeaders(requestOrigin)
+
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+    return handleCorsPreflightRequest(requestOrigin)
   }
 
   try {
@@ -59,22 +54,28 @@ Deno.serve(async (req) => {
 
     // POST /transfers?action=send - Create payment intent
     if (req.method === 'POST' && action === 'send') {
-      const body: TransferRequest = await req.json()
+      const body = await req.json()
 
-      // Validate input
-      if (!body.recipient_wallet_id || !body.amount || !body.description) {
-        return new Response(
-          JSON.stringify({ error: 'recipient_wallet_id, amount, and description are required' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+      // Validate recipient_wallet_id
+      if (!isValidUUID(body.recipient_wallet_id)) {
+        return validationError('Invalid recipient wallet ID format', corsHeaders)
       }
 
-      if (body.amount <= 0) {
-        return new Response(
-          JSON.stringify({ error: 'Amount must be positive' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+      // Validate amount
+      const amountValidation = validateAmount(body.amount)
+      if (!amountValidation.valid) {
+        return validationError(amountValidation.error!, corsHeaders)
       }
+
+      // Validate description
+      const descriptionValidation = validateDescription(body.description)
+      if (!descriptionValidation.valid) {
+        return validationError(descriptionValidation.error!, corsHeaders)
+      }
+
+      const recipientWalletId = body.recipient_wallet_id
+      const amount = amountValidation.value
+      const description = descriptionValidation.value
 
       // Get sender's wallet
       const { data: senderWallet } = await supabase
@@ -94,7 +95,7 @@ Deno.serve(async (req) => {
       const { data: recipientWallet } = await supabase
         .from('wallets')
         .select('id, user_id')
-        .eq('id', body.recipient_wallet_id)
+        .eq('id', recipientWalletId)
         .single()
 
       if (!recipientWallet) {
@@ -112,9 +113,9 @@ Deno.serve(async (req) => {
         )
       }
 
-      // Check balance
+      // Check balance first (will be re-checked atomically during transfer)
       const { data: balance } = await supabase.rpc('get_wallet_balance', { p_wallet_id: senderWallet.id })
-      if (Number(balance) < body.amount) {
+      if (Number(balance) < amount) {
         return new Response(
           JSON.stringify({ error: 'Insufficient funds', available: Number(balance) }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -134,7 +135,7 @@ Deno.serve(async (req) => {
 
       const largeThreshold = Number(thresholdSetting?.setting_value) || 500
 
-      if (body.amount > largeThreshold) {
+      if (amount > largeThreshold) {
         isRisky = true
         riskReason = `Large transfer over $${largeThreshold}`
       }
@@ -145,7 +146,7 @@ Deno.serve(async (req) => {
           .from('transactions')
           .select('id', { count: 'exact', head: true })
           .eq('sender_wallet_id', senderWallet.id)
-          .eq('recipient_wallet_id', body.recipient_wallet_id)
+          .eq('recipient_wallet_id', recipientWalletId)
           .eq('status', 'completed')
 
         if (count === 0) {
@@ -187,9 +188,9 @@ Deno.serve(async (req) => {
         .insert({
           type: 'send',
           sender_wallet_id: senderWallet.id,
-          recipient_wallet_id: body.recipient_wallet_id,
-          amount: body.amount,
-          description: body.description,
+          recipient_wallet_id: recipientWalletId,
+          amount,
+          description,
           status: initialStatus,
           is_risky: isRisky,
           risk_reason: riskReason
@@ -205,17 +206,31 @@ Deno.serve(async (req) => {
         )
       }
 
-      // If not risky, complete immediately
+      // If not risky, complete immediately using atomic transfer
       if (!isRisky) {
-        const result = await completeTransfer(supabase, transaction.id, senderWallet.id, body.recipient_wallet_id, body.amount, body.description)
-        if (!result.success) {
+        const { data: transferResult, error: transferError } = await supabase.rpc('atomic_transfer', {
+          p_sender_wallet_id: senderWallet.id,
+          p_recipient_wallet_id: recipientWalletId,
+          p_amount: amount,
+          p_transaction_id: transaction.id,
+          p_description: description
+        })
+
+        if (transferError || !transferResult?.success) {
+          // Update transaction to failed
+          await supabase.from('transactions').update({ status: 'failed' }).eq('id', transaction.id)
           return new Response(
-            JSON.stringify({ error: result.error }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            JSON.stringify({ 
+              error: transferResult?.error || 'Failed to complete transfer',
+              available: transferResult?.available
+            }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           )
         }
 
-        // Get updated transaction
+        // Update transaction to completed
+        await supabase.from('transactions').update({ status: 'completed' }).eq('id', transaction.id)
+
         const { data: updatedTx } = await supabase
           .from('transactions')
           .select('*')
@@ -246,13 +261,10 @@ Deno.serve(async (req) => {
 
     // POST /transfers?action=confirm - Confirm risky transfer
     if (req.method === 'POST' && action === 'confirm') {
-      const body: ConfirmRequest = await req.json()
+      const body = await req.json()
 
-      if (!body.transaction_id) {
-        return new Response(
-          JSON.stringify({ error: 'transaction_id required' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+      if (!isValidUUID(body.transaction_id)) {
+        return validationError('Invalid transaction ID format', corsHeaders)
       }
 
       // Get sender's wallet
@@ -285,39 +297,30 @@ Deno.serve(async (req) => {
         )
       }
 
-      // Re-check balance
-      const { data: balance } = await supabase.rpc('get_wallet_balance', { p_wallet_id: senderWallet.id })
-      if (Number(balance) < transaction.amount) {
-        // Mark as failed
-        await supabase
-          .from('transactions')
-          .update({ status: 'failed' })
-          .eq('id', transaction.id)
+      // Complete the transfer atomically
+      const { data: transferResult, error: transferError } = await supabase.rpc('atomic_transfer', {
+        p_sender_wallet_id: senderWallet.id,
+        p_recipient_wallet_id: transaction.recipient_wallet_id,
+        p_amount: transaction.amount,
+        p_transaction_id: transaction.id,
+        p_description: transaction.description
+      })
 
+      if (transferError || !transferResult?.success) {
+        // Mark as failed
+        await supabase.from('transactions').update({ status: 'failed' }).eq('id', transaction.id)
         return new Response(
-          JSON.stringify({ error: 'Insufficient funds' }),
+          JSON.stringify({ 
+            error: transferResult?.error || 'Insufficient funds',
+            available: transferResult?.available
+          }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
 
-      // Complete the transfer
-      const result = await completeTransfer(
-        supabase,
-        transaction.id,
-        senderWallet.id,
-        transaction.recipient_wallet_id,
-        transaction.amount,
-        transaction.description
-      )
+      // Update transaction status
+      await supabase.from('transactions').update({ status: 'completed' }).eq('id', transaction.id)
 
-      if (!result.success) {
-        return new Response(
-          JSON.stringify({ error: result.error }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
-
-      // Get updated transaction
       const { data: updatedTx } = await supabase
         .from('transactions')
         .select('*')
@@ -336,13 +339,10 @@ Deno.serve(async (req) => {
 
     // POST /transfers?action=cancel - Cancel pending transfer
     if (req.method === 'POST' && action === 'cancel') {
-      const body: ConfirmRequest = await req.json()
+      const body = await req.json()
 
-      if (!body.transaction_id) {
-        return new Response(
-          JSON.stringify({ error: 'transaction_id required' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+      if (!isValidUUID(body.transaction_id)) {
+        return validationError('Invalid transaction ID format', corsHeaders)
       }
 
       const { data: senderWallet } = await supabase
@@ -388,11 +388,9 @@ Deno.serve(async (req) => {
     // GET /transfers?action=status&id=xxx - Get transfer status
     if (req.method === 'GET' && action === 'status') {
       const transactionId = url.searchParams.get('id')
-      if (!transactionId) {
-        return new Response(
-          JSON.stringify({ error: 'Transaction ID required' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+      
+      if (!isValidUUID(transactionId)) {
+        return validationError('Invalid transaction ID format', corsHeaders)
       }
 
       const { data: senderWallet } = await supabase
@@ -428,72 +426,10 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Transfer error:', error)
+    const corsHeaders = getCorsHeaders()
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 })
-
-// Helper: Complete a transfer (create ledger entries)
-async function completeTransfer(
-  supabase: any,
-  transactionId: string,
-  senderWalletId: string,
-  recipientWalletId: string,
-  amount: number,
-  description: string
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    // Create debit entry for sender
-    const { error: debitError } = await supabase
-      .from('ledger_entries')
-      .insert({
-        wallet_id: senderWalletId,
-        amount: -amount, // negative = debit
-        reference_transaction_id: transactionId,
-        description: `Sent: ${description}`
-      })
-
-    if (debitError) {
-      console.error('Debit error:', debitError)
-      return { success: false, error: 'Failed to debit sender' }
-    }
-
-    // Create credit entry for recipient
-    const { error: creditError } = await supabase
-      .from('ledger_entries')
-      .insert({
-        wallet_id: recipientWalletId,
-        amount: amount, // positive = credit
-        reference_transaction_id: transactionId,
-        description: `Received: ${description}`
-      })
-
-    if (creditError) {
-      console.error('Credit error:', creditError)
-      // In production, you'd need to reverse the debit here
-      return { success: false, error: 'Failed to credit recipient' }
-    }
-
-    // Update transaction status to completed
-    const { error: updateError } = await supabase
-      .from('transactions')
-      .update({ status: 'completed' })
-      .eq('id', transactionId)
-
-    if (updateError) {
-      console.error('Update error:', updateError)
-      return { success: false, error: 'Failed to update transaction status' }
-    }
-
-    // NOTE: We only create ONE transaction record per transfer.
-    // The frontend shows it as 'send' for sender and 'receive' for recipient
-    // based on the is_outgoing flag computed from wallet IDs.
-
-    return { success: true }
-  } catch (error) {
-    console.error('Complete transfer error:', error)
-    return { success: false, error: 'Internal error completing transfer' }
-  }
-}

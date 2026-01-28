@@ -4,19 +4,15 @@
 // =========================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-}
-
-interface CardActionBody {
-  card_id: string
-}
+import { getCorsHeaders, handleCorsPreflightRequest } from '../_shared/cors.ts'
+import { isValidUUID, validationError } from '../_shared/validation.ts'
 
 Deno.serve(async (req) => {
+  const requestOrigin = req.headers.get('Origin')
+  const corsHeaders = getCorsHeaders(requestOrigin)
+
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+    return handleCorsPreflightRequest(requestOrigin)
   }
 
   try {
@@ -101,11 +97,9 @@ Deno.serve(async (req) => {
     // GET /cards?action=detail&id=xxx - Get full card details (for viewing)
     if (req.method === 'GET' && action === 'detail') {
       const cardId = url.searchParams.get('id')
-      if (!cardId) {
-        return new Response(
-          JSON.stringify({ error: 'Card ID required' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+      
+      if (!isValidUUID(cardId)) {
+        return validationError('Invalid card ID format', corsHeaders)
       }
 
       const { data: card, error } = await supabase
@@ -144,13 +138,10 @@ Deno.serve(async (req) => {
 
     // POST /cards?action=freeze - Freeze a card
     if (req.method === 'POST' && action === 'freeze') {
-      const body: CardActionBody = await req.json()
+      const body = await req.json()
 
-      if (!body.card_id) {
-        return new Response(
-          JSON.stringify({ error: 'card_id required' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+      if (!isValidUUID(body.card_id)) {
+        return validationError('Invalid card ID format', corsHeaders)
       }
 
       const { data: card, error } = await supabase
@@ -184,13 +175,10 @@ Deno.serve(async (req) => {
 
     // POST /cards?action=unfreeze - Unfreeze a card
     if (req.method === 'POST' && action === 'unfreeze') {
-      const body: CardActionBody = await req.json()
+      const body = await req.json()
 
-      if (!body.card_id) {
-        return new Response(
-          JSON.stringify({ error: 'card_id required' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+      if (!isValidUUID(body.card_id)) {
+        return validationError('Invalid card ID format', corsHeaders)
       }
 
       const { data: card, error } = await supabase
@@ -286,6 +274,7 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Card error:', error)
+    const corsHeaders = getCorsHeaders()
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

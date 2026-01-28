@@ -4,15 +4,25 @@
 // =========================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { getCorsHeaders, handleCorsPreflightRequest } from '../_shared/cors.ts'
+import { 
+  isValidUUID,
+  validateEnum,
+  validatePagination,
+  validationError,
+  VALID_TRANSACTION_TYPES,
+  VALID_TRANSACTION_STATUSES
+} from '../_shared/validation.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-}
+// Valid insight periods
+const VALID_PERIODS = ['week', 'month', 'year']
 
 Deno.serve(async (req) => {
+  const requestOrigin = req.headers.get('Origin')
+  const corsHeaders = getCorsHeaders(requestOrigin)
+
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+    return handleCorsPreflightRequest(requestOrigin)
   }
 
   try {
@@ -62,10 +72,24 @@ Deno.serve(async (req) => {
 
     // GET /transactions or GET /transactions?action=list - List all transactions
     if (req.method === 'GET' && (!action || action === 'list')) {
-      const limit = parseInt(url.searchParams.get('limit') || '50')
-      const offset = parseInt(url.searchParams.get('offset') || '0')
-      const type = url.searchParams.get('type') // filter by type
-      const status = url.searchParams.get('status') // filter by status
+      const { limit, offset } = validatePagination(
+        url.searchParams.get('limit'),
+        url.searchParams.get('offset')
+      )
+      
+      // Validate type filter
+      const typeParam = url.searchParams.get('type')
+      const typeValidation = validateEnum(typeParam, VALID_TRANSACTION_TYPES, 'type')
+      if (!typeValidation.valid) {
+        return validationError(typeValidation.error!, corsHeaders)
+      }
+      
+      // Validate status filter
+      const statusParam = url.searchParams.get('status')
+      const statusValidation = validateEnum(statusParam, VALID_TRANSACTION_STATUSES, 'status')
+      if (!statusValidation.valid) {
+        return validationError(statusValidation.error!, corsHeaders)
+      }
 
       let query = supabase
         .from('transactions')
@@ -74,11 +98,11 @@ Deno.serve(async (req) => {
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1)
 
-      if (type) {
-        query = query.eq('type', type)
+      if (typeValidation.value) {
+        query = query.eq('type', typeValidation.value)
       }
-      if (status) {
-        query = query.eq('status', status)
+      if (statusValidation.value) {
+        query = query.eq('status', statusValidation.value)
       }
 
       const { data: transactions, error } = await query
@@ -152,11 +176,9 @@ Deno.serve(async (req) => {
     // GET /transactions?action=detail&id=xxx - Get transaction detail
     if (req.method === 'GET' && action === 'detail') {
       const transactionId = url.searchParams.get('id')
-      if (!transactionId) {
-        return new Response(
-          JSON.stringify({ error: 'Transaction ID required' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+      
+      if (!isValidUUID(transactionId)) {
+        return validationError('Invalid transaction ID format', corsHeaders)
       }
 
       const { data: transaction } = await supabase
@@ -247,7 +269,11 @@ Deno.serve(async (req) => {
 
     // GET /transactions?action=insights - Get spending insights
     if (req.method === 'GET' && action === 'insights') {
-      const period = url.searchParams.get('period') || 'month' // month, week, year
+      const periodParam = url.searchParams.get('period') || 'month'
+      
+      // Validate period
+      const periodValidation = validateEnum(periodParam, VALID_PERIODS, 'period')
+      const period = periodValidation.value || 'month'
 
       // Calculate date range
       const now = new Date()
@@ -398,6 +424,7 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Transaction error:', error)
+    const corsHeaders = getCorsHeaders()
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

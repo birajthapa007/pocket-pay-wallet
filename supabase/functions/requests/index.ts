@@ -1,28 +1,24 @@
 // =========================================
 // POCKET PAY - MONEY REQUEST OPERATIONS
 // Create, accept, decline money requests
+// Uses atomic operations for payment processing
 // =========================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-}
-
-interface CreateRequestBody {
-  requested_from_wallet_id: string
-  amount: number
-  note?: string
-}
-
-interface RequestActionBody {
-  request_id: string
-}
+import { getCorsHeaders, handleCorsPreflightRequest } from '../_shared/cors.ts'
+import { 
+  isValidUUID,
+  validateAmount, 
+  validateNote,
+  validationError
+} from '../_shared/validation.ts'
 
 Deno.serve(async (req) => {
+  const requestOrigin = req.headers.get('Origin')
+  const corsHeaders = getCorsHeaders(requestOrigin)
+
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+    return handleCorsPreflightRequest(requestOrigin)
   }
 
   try {
@@ -58,21 +54,28 @@ Deno.serve(async (req) => {
 
     // POST /requests?action=create - Create money request
     if (req.method === 'POST' && action === 'create') {
-      const body: CreateRequestBody = await req.json()
+      const body = await req.json()
 
-      if (!body.requested_from_wallet_id || !body.amount) {
-        return new Response(
-          JSON.stringify({ error: 'requested_from_wallet_id and amount are required' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+      // Validate requested_from_wallet_id
+      if (!isValidUUID(body.requested_from_wallet_id)) {
+        return validationError('Invalid wallet ID format', corsHeaders)
       }
 
-      if (body.amount <= 0) {
-        return new Response(
-          JSON.stringify({ error: 'Amount must be positive' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+      // Validate amount
+      const amountValidation = validateAmount(body.amount)
+      if (!amountValidation.valid) {
+        return validationError(amountValidation.error!, corsHeaders)
       }
+
+      // Validate note (optional)
+      const noteValidation = validateNote(body.note)
+      if (!noteValidation.valid) {
+        return validationError(noteValidation.error!, corsHeaders)
+      }
+
+      const requestedFromWalletId = body.requested_from_wallet_id
+      const amount = amountValidation.value
+      const note = noteValidation.value
 
       // Get requester's wallet
       const { data: requesterWallet } = await supabase
@@ -92,7 +95,7 @@ Deno.serve(async (req) => {
       const { data: targetWallet } = await supabase
         .from('wallets')
         .select('id')
-        .eq('id', body.requested_from_wallet_id)
+        .eq('id', requestedFromWalletId)
         .single()
 
       if (!targetWallet) {
@@ -115,9 +118,9 @@ Deno.serve(async (req) => {
         .from('money_requests')
         .insert({
           requester_wallet_id: requesterWallet.id,
-          requested_from_wallet_id: body.requested_from_wallet_id,
-          amount: body.amount,
-          note: body.note || null,
+          requested_from_wallet_id: requestedFromWalletId,
+          amount,
+          note,
           status: 'pending'
         })
         .select()
@@ -142,13 +145,10 @@ Deno.serve(async (req) => {
 
     // POST /requests?action=accept - Accept money request (pay it)
     if (req.method === 'POST' && action === 'accept') {
-      const body: RequestActionBody = await req.json()
+      const body = await req.json()
 
-      if (!body.request_id) {
-        return new Response(
-          JSON.stringify({ error: 'request_id required' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+      if (!isValidUUID(body.request_id)) {
+        return validationError('Invalid request ID format', corsHeaders)
       }
 
       // Get user's wallet (they are the one paying)
@@ -181,16 +181,7 @@ Deno.serve(async (req) => {
         )
       }
 
-      // Check balance
-      const { data: balance } = await supabase.rpc('get_wallet_balance', { p_wallet_id: payerWallet.id })
-      if (Number(balance) < request.amount) {
-        return new Response(
-          JSON.stringify({ error: 'Insufficient funds', available: Number(balance) }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
-
-      // Create the transfer transaction
+      // Create the transfer transaction first
       const { data: transaction, error: txError } = await supabase
         .from('transactions')
         .insert({
@@ -199,7 +190,7 @@ Deno.serve(async (req) => {
           recipient_wallet_id: request.requester_wallet_id,
           amount: request.amount,
           description: request.note || 'Payment for request',
-          status: 'completed'
+          status: 'created'
         })
         .select()
         .single()
@@ -212,22 +203,29 @@ Deno.serve(async (req) => {
         )
       }
 
-      // Create ledger entries
-      // Debit payer
-      await supabase.from('ledger_entries').insert({
-        wallet_id: payerWallet.id,
-        amount: -request.amount,
-        reference_transaction_id: transaction.id,
-        description: `Paid request: ${request.note || 'Payment'}`
+      // Process transfer atomically
+      const { data: transferResult, error: transferError } = await supabase.rpc('atomic_transfer', {
+        p_sender_wallet_id: payerWallet.id,
+        p_recipient_wallet_id: request.requester_wallet_id,
+        p_amount: request.amount,
+        p_transaction_id: transaction.id,
+        p_description: request.note || 'Payment for request'
       })
 
-      // Credit requester
-      await supabase.from('ledger_entries').insert({
-        wallet_id: request.requester_wallet_id,
-        amount: request.amount,
-        reference_transaction_id: transaction.id,
-        description: `Received from request: ${request.note || 'Payment'}`
-      })
+      if (transferError || !transferResult?.success) {
+        // Mark transaction as failed
+        await supabase.from('transactions').update({ status: 'failed' }).eq('id', transaction.id)
+        return new Response(
+          JSON.stringify({ 
+            error: transferResult?.error || 'Insufficient funds', 
+            available: transferResult?.available 
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Update transaction to completed
+      await supabase.from('transactions').update({ status: 'completed' }).eq('id', transaction.id)
 
       // Update request status
       const { data: updatedRequest, error: updateError } = await supabase
@@ -256,13 +254,10 @@ Deno.serve(async (req) => {
 
     // POST /requests?action=decline - Decline money request
     if (req.method === 'POST' && action === 'decline') {
-      const body: RequestActionBody = await req.json()
+      const body = await req.json()
 
-      if (!body.request_id) {
-        return new Response(
-          JSON.stringify({ error: 'request_id required' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+      if (!isValidUUID(body.request_id)) {
+        return validationError('Invalid request ID format', corsHeaders)
       }
 
       const { data: payerWallet } = await supabase
@@ -305,13 +300,10 @@ Deno.serve(async (req) => {
 
     // POST /requests?action=cancel - Cancel own request
     if (req.method === 'POST' && action === 'cancel') {
-      const body: RequestActionBody = await req.json()
+      const body = await req.json()
 
-      if (!body.request_id) {
-        return new Response(
-          JSON.stringify({ error: 'request_id required' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+      if (!isValidUUID(body.request_id)) {
+        return validationError('Invalid request ID format', corsHeaders)
       }
 
       const { data: requesterWallet } = await supabase
@@ -441,6 +433,7 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Request error:', error)
+    const corsHeaders = getCorsHeaders()
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
