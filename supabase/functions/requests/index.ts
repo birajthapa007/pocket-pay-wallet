@@ -229,16 +229,6 @@ Deno.serve(async (req) => {
         description: `Received from request: ${request.note || 'Payment'}`
       })
 
-      // Create receive transaction for requester's history
-      await supabase.from('transactions').insert({
-        type: 'receive',
-        sender_wallet_id: payerWallet.id,
-        recipient_wallet_id: request.requester_wallet_id,
-        amount: request.amount,
-        description: request.note || 'Payment for request',
-        status: 'completed'
-      })
-
       // Update request status
       const { data: updatedRequest, error: updateError } = await supabase
         .from('money_requests')
