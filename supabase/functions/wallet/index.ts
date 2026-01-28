@@ -4,16 +4,16 @@
 // =========================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-}
+import { getCorsHeaders, handleCorsPreflightRequest } from '../_shared/cors.ts'
+import { sanitizeText, validatePagination } from '../_shared/validation.ts'
 
 Deno.serve(async (req) => {
+  const requestOrigin = req.headers.get('Origin')
+  const corsHeaders = getCorsHeaders(requestOrigin)
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+    return handleCorsPreflightRequest(requestOrigin)
   }
 
   try {
@@ -144,10 +144,21 @@ Deno.serve(async (req) => {
 
     // GET /wallet?action=lookup&username=xxx - Find user by username
     if (req.method === 'GET' && action === 'lookup') {
-      const username = url.searchParams.get('username')
-      if (!username) {
+      const rawUsername = url.searchParams.get('username')
+      
+      if (!rawUsername) {
         return new Response(
           JSON.stringify({ error: 'Username required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      
+      // Sanitize username input
+      const username = sanitizeText(rawUsername, 100)
+      
+      if (username.length === 0) {
+        return new Response(
+          JSON.stringify({ error: 'Invalid username' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
@@ -188,12 +199,15 @@ Deno.serve(async (req) => {
 
     // GET /wallet?action=contacts - Get all users for contact list
     if (req.method === 'GET' && action === 'contacts') {
+      const { limit } = validatePagination(url.searchParams.get('limit'), 0)
+      const actualLimit = Math.min(limit || 50, 100) // Cap at 100
+      
       const { data: profiles } = await supabase
         .from('profiles')
         .select('id, name, username, avatar_url')
         .neq('id', userId)
         .order('name')
-        .limit(50)
+        .limit(actualLimit)
 
       return new Response(
         JSON.stringify({ contacts: profiles || [] }),
@@ -208,6 +222,7 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Wallet error:', error)
+    const corsHeaders = getCorsHeaders()
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

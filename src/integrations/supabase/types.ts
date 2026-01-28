@@ -300,6 +300,34 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      atomic_credit_balance: {
+        Args: {
+          p_amount: number
+          p_description: string
+          p_transaction_id: string
+          p_wallet_id: string
+        }
+        Returns: Json
+      }
+      atomic_debit_balance: {
+        Args: {
+          p_amount: number
+          p_description: string
+          p_transaction_id: string
+          p_wallet_id: string
+        }
+        Returns: Json
+      }
+      atomic_transfer: {
+        Args: {
+          p_amount: number
+          p_description: string
+          p_recipient_wallet_id: string
+          p_sender_wallet_id: string
+          p_transaction_id: string
+        }
+        Returns: Json
+      }
       get_pending_balance: { Args: { p_wallet_id: string }; Returns: number }
       get_user_wallet_id: { Args: { p_user_id: string }; Returns: string }
       get_wallet_balance: { Args: { p_wallet_id: string }; Returns: number }

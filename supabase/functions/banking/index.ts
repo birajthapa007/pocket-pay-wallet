@@ -1,32 +1,28 @@
 // =========================================
 // POCKET PAY - BANKING OPERATIONS
 // Deposit from bank, Withdraw to bank
+// Uses atomic database operations for race condition protection
 // =========================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-}
+import { getCorsHeaders, handleCorsPreflightRequest } from '../_shared/cors.ts'
+import { 
+  validateAmount, 
+  validateBankName, 
+  validateEnum,
+  validationError,
+  VALID_WITHDRAWAL_SPEEDS
+} from '../_shared/validation.ts'
 
 // Fee for instant withdrawal (1.5%)
 const INSTANT_FEE_PERCENTAGE = 0.015
 
-interface DepositBody {
-  amount: number
-  bank_name?: string
-}
-
-interface WithdrawBody {
-  amount: number
-  speed: 'standard' | 'instant'
-  bank_name?: string
-}
-
 Deno.serve(async (req) => {
+  const requestOrigin = req.headers.get('Origin')
+  const corsHeaders = getCorsHeaders(requestOrigin)
+
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+    return handleCorsPreflightRequest(requestOrigin)
   }
 
   try {
@@ -76,24 +72,33 @@ Deno.serve(async (req) => {
 
     // POST /banking?action=deposit - Deposit from bank
     if (req.method === 'POST' && action === 'deposit') {
-      const body: DepositBody = await req.json()
+      const body = await req.json()
 
-      if (!body.amount || body.amount <= 0) {
-        return new Response(
-          JSON.stringify({ error: 'Amount must be positive' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+      // Validate amount
+      const amountValidation = validateAmount(body.amount)
+      if (!amountValidation.valid) {
+        return validationError(amountValidation.error!, corsHeaders)
       }
+
+      // Validate bank name (optional)
+      const bankNameValidation = validateBankName(body.bank_name)
+      if (!bankNameValidation.valid) {
+        return validationError(bankNameValidation.error!, corsHeaders)
+      }
+
+      const amount = amountValidation.value
+      const bankName = bankNameValidation.value
+      const description = bankName ? `Deposit from ${bankName}` : 'Bank deposit'
 
       // Create deposit transaction
       const { data: transaction, error: txError } = await supabase
         .from('transactions')
         .insert({
           type: 'deposit',
-          sender_wallet_id: wallet.id, // For RLS - user owns this
+          sender_wallet_id: wallet.id,
           recipient_wallet_id: wallet.id,
-          amount: body.amount,
-          description: body.bank_name ? `Deposit from ${body.bank_name}` : 'Bank deposit',
+          amount,
+          description,
           status: 'completed'
         })
         .select()
@@ -107,19 +112,27 @@ Deno.serve(async (req) => {
         )
       }
 
-      // Credit wallet
-      await supabase.from('ledger_entries').insert({
-        wallet_id: wallet.id,
-        amount: body.amount,
-        reference_transaction_id: transaction.id,
-        description: body.bank_name ? `Deposit from ${body.bank_name}` : 'Bank deposit'
+      // Credit wallet using atomic function
+      const { data: creditResult, error: creditError } = await supabase.rpc('atomic_credit_balance', {
+        p_wallet_id: wallet.id,
+        p_amount: amount,
+        p_transaction_id: transaction.id,
+        p_description: description
       })
+
+      if (creditError) {
+        console.error('Credit error:', creditError)
+        return new Response(
+          JSON.stringify({ error: 'Failed to credit wallet' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
 
       return new Response(
         JSON.stringify({
           transaction,
           message: 'Deposit successful',
-          amount: body.amount
+          amount
         }),
         { status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
@@ -127,56 +140,50 @@ Deno.serve(async (req) => {
 
     // POST /banking?action=withdraw - Withdraw to bank
     if (req.method === 'POST' && action === 'withdraw') {
-      const body: WithdrawBody = await req.json()
+      const body = await req.json()
 
-      if (!body.amount || body.amount <= 0) {
-        return new Response(
-          JSON.stringify({ error: 'Amount must be positive' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+      // Validate amount
+      const amountValidation = validateAmount(body.amount)
+      if (!amountValidation.valid) {
+        return validationError(amountValidation.error!, corsHeaders)
       }
 
-      if (!['standard', 'instant'].includes(body.speed)) {
-        return new Response(
-          JSON.stringify({ error: 'Speed must be standard or instant' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+      // Validate speed
+      const speedValidation = validateEnum(body.speed, VALID_WITHDRAWAL_SPEEDS, 'speed')
+      if (!speedValidation.valid || !speedValidation.value) {
+        return validationError(speedValidation.error || 'Speed is required (standard or instant)', corsHeaders)
       }
+
+      // Validate bank name (optional)
+      const bankNameValidation = validateBankName(body.bank_name)
+      if (!bankNameValidation.valid) {
+        return validationError(bankNameValidation.error!, corsHeaders)
+      }
+
+      const amount = amountValidation.value
+      const speed = speedValidation.value
+      const bankName = bankNameValidation.value
 
       // Calculate fee for instant
-      const fee = body.speed === 'instant' ? Math.round(body.amount * INSTANT_FEE_PERCENTAGE * 100) / 100 : 0
-      const totalDebit = body.amount + fee
-
-      // Check balance
-      const { data: balance } = await supabase.rpc('get_wallet_balance', { p_wallet_id: wallet.id })
-      if (Number(balance) < totalDebit) {
-        return new Response(
-          JSON.stringify({ 
-            error: 'Insufficient funds', 
-            available: Number(balance),
-            required: totalDebit
-          }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
+      const fee = speed === 'instant' ? Math.round(amount * INSTANT_FEE_PERCENTAGE * 100) / 100 : 0
+      const totalDebit = amount + fee
 
       // Determine status based on speed
-      const status = body.speed === 'instant' ? 'completed' : 'pending_confirmation'
-      const estimatedArrival = body.speed === 'instant' 
-        ? 'Instant' 
-        : '1-3 business days'
+      const status = speed === 'instant' ? 'completed' : 'pending_confirmation'
+      const estimatedArrival = speed === 'instant' ? 'Instant' : '1-3 business days'
+      const description = bankName 
+        ? `${speed === 'instant' ? 'Instant ' : ''}Withdrawal to ${bankName}` 
+        : `${speed === 'instant' ? 'Instant ' : ''}Bank withdrawal`
 
-      // Create withdrawal transaction
+      // Create withdrawal transaction first
       const { data: transaction, error: txError } = await supabase
         .from('transactions')
         .insert({
           type: 'withdrawal',
           sender_wallet_id: wallet.id,
-          recipient_wallet_id: wallet.id, // For RLS
-          amount: body.amount,
-          description: body.bank_name 
-            ? `${body.speed === 'instant' ? 'Instant ' : ''}Withdrawal to ${body.bank_name}` 
-            : `${body.speed === 'instant' ? 'Instant ' : ''}Bank withdrawal`,
+          recipient_wallet_id: wallet.id,
+          amount,
+          description,
           status
         })
         .select()
@@ -190,33 +197,57 @@ Deno.serve(async (req) => {
         )
       }
 
-      // Debit wallet
-      await supabase.from('ledger_entries').insert({
-        wallet_id: wallet.id,
-        amount: -body.amount,
-        reference_transaction_id: transaction.id,
-        description: `Withdrawal to bank`
+      // Debit wallet atomically (includes balance check with row locking)
+      const { data: debitResult, error: debitError } = await supabase.rpc('atomic_debit_balance', {
+        p_wallet_id: wallet.id,
+        p_amount: amount,
+        p_transaction_id: transaction.id,
+        p_description: 'Withdrawal to bank'
       })
 
-      // Debit fee if instant
+      if (debitError) {
+        console.error('Debit error:', debitError)
+        // Rollback transaction
+        await supabase.from('transactions').update({ status: 'failed' }).eq('id', transaction.id)
+        return new Response(
+          JSON.stringify({ error: 'Failed to process withdrawal' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Check if debit was successful
+      if (!debitResult?.success) {
+        // Rollback transaction
+        await supabase.from('transactions').update({ status: 'failed' }).eq('id', transaction.id)
+        return new Response(
+          JSON.stringify({ 
+            error: debitResult?.error || 'Insufficient funds',
+            available: debitResult?.available,
+            required: totalDebit
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Debit fee if instant (using atomic function)
       if (fee > 0) {
-        await supabase.from('ledger_entries').insert({
-          wallet_id: wallet.id,
-          amount: -fee,
-          reference_transaction_id: transaction.id,
-          description: `Instant withdrawal fee (${INSTANT_FEE_PERCENTAGE * 100}%)`
+        await supabase.rpc('atomic_debit_balance', {
+          p_wallet_id: wallet.id,
+          p_amount: fee,
+          p_transaction_id: transaction.id,
+          p_description: `Instant withdrawal fee (${INSTANT_FEE_PERCENTAGE * 100}%)`
         })
       }
 
       return new Response(
         JSON.stringify({
           transaction,
-          message: body.speed === 'instant' ? 'Instant withdrawal complete' : 'Withdrawal initiated',
-          amount: body.amount,
+          message: speed === 'instant' ? 'Instant withdrawal complete' : 'Withdrawal initiated',
+          amount,
           fee,
           total_debited: totalDebit,
           estimated_arrival: estimatedArrival,
-          speed: body.speed
+          speed
         }),
         { status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
@@ -229,6 +260,7 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Banking error:', error)
+    const corsHeaders = getCorsHeaders()
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
