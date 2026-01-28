@@ -21,6 +21,7 @@ import HelpScreen from '@/components/screens/HelpScreen';
 import CardsScreen from '@/components/screens/CardsScreen';
 import ContactProfileScreen from '@/components/screens/ContactProfileScreen';
 import TransactionDetailScreen from '@/components/screens/TransactionDetailScreen';
+import ScanScreen from '@/components/screens/ScanScreen';
 import BottomNav from '@/components/navigation/BottomNav';
 
 const Index = () => {
@@ -129,7 +130,7 @@ const Index = () => {
     'send', 'send-amount', 'send-confirm', 'send-success', 
     'receive', 'request', 'request-amount', 'request-success',
     'profile', 'security', 'notifications', 'help', 'cards', 
-    'contact-profile', 'transaction-detail'
+    'contact-profile', 'transaction-detail', 'scan'
   ];
   const showNav = isLoggedIn && !flowScreens.includes(currentScreen);
 
@@ -147,6 +148,7 @@ const Index = () => {
             onSend={() => setCurrentScreen('send')}
             onReceive={() => setCurrentScreen('receive')}
             onRequest={() => setCurrentScreen('request')}
+            onScan={() => setCurrentScreen('scan')}
             onViewHistory={() => setCurrentScreen('history')}
             onOpenProfile={() => setCurrentScreen('settings')}
             onNavigate={handleNavigate}
@@ -291,6 +293,20 @@ const Index = () => {
             onBack={() => setCurrentScreen(previousScreen)}
             onViewProfile={handleViewContactFromTransaction}
             onNavigate={handleNavigate}
+          />
+        );
+      case 'scan':
+        return (
+          <ScanScreen
+            onUserFound={(foundUser, action) => {
+              setSelectedRecipient(foundUser);
+              if (action === 'send') {
+                setCurrentScreen('send-amount');
+              } else {
+                setCurrentScreen('request-amount');
+              }
+            }}
+            onBack={() => setCurrentScreen('home')}
           />
         );
       default:

@@ -45,15 +45,13 @@ const SendSuccessScreen = React.forwardRef<HTMLDivElement, SendSuccessScreenProp
             </div>
           </div>
           
-          <div className="flex items-center justify-between pt-4 border-t border-border/50">
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Amount</p>
-              <p className="text-xl font-bold text-foreground">{formatCurrency(amount)}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-xs text-muted-foreground mb-1">For</p>
-              <p className="text-sm font-medium text-foreground max-w-[120px] truncate">"{note}"</p>
-            </div>
+          <div className="text-center py-3 border-t border-border/50">
+            <p className="text-2xl font-bold text-foreground">{formatCurrency(amount)}</p>
+          </div>
+          
+          <div className="bg-secondary/50 rounded-xl px-4 py-3">
+            <p className="text-xs text-muted-foreground mb-1">Payment note</p>
+            <p className="text-sm font-medium text-foreground">{note}</p>
           </div>
         </div>
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowUpRight, ArrowDownLeft, HandCoins, ChevronRight, Eye, EyeOff, CreditCard, ShieldCheck } from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft, HandCoins, ChevronRight, Eye, EyeOff, CreditCard, ShieldCheck, ScanLine } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { WalletBalance, Transaction, User, Screen } from '@/types/wallet';
 import { formatCurrency } from '@/data/mockData';
@@ -14,6 +14,7 @@ interface HomeScreenProps {
   onSend: () => void;
   onReceive: () => void;
   onRequest: () => void;
+  onScan: () => void;
   onViewHistory: () => void;
   onOpenProfile: () => void;
   onNavigate: (screen: Screen) => void;
@@ -28,6 +29,7 @@ const HomeScreen = React.forwardRef<HTMLDivElement, HomeScreenProps>(({
   onSend, 
   onReceive, 
   onRequest,
+  onScan,
   onViewHistory,
   onOpenProfile,
   onNavigate,
@@ -49,12 +51,22 @@ const HomeScreen = React.forwardRef<HTMLDivElement, HomeScreenProps>(({
           <p className="text-muted-foreground text-sm">Welcome back,</p>
           <p className="text-lg font-semibold">{user.name.split(' ')[0]}</p>
         </div>
-        <button 
-          onClick={onOpenProfile}
-          className="w-11 h-11 rounded-full bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-primary-foreground font-semibold shadow-glow-sm active:scale-95 transition-transform"
-        >
-          {getInitials(user.name)}
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Scan QR Button */}
+          <button 
+            onClick={onScan}
+            className="w-11 h-11 rounded-full bg-secondary flex items-center justify-center text-foreground active:scale-95 transition-transform hover:bg-muted"
+          >
+            <ScanLine className="w-5 h-5" />
+          </button>
+          {/* Profile */}
+          <button 
+            onClick={onOpenProfile}
+            className="w-11 h-11 rounded-full bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-primary-foreground font-semibold shadow-glow-sm active:scale-95 transition-transform"
+          >
+            {getInitials(user.name)}
+          </button>
+        </div>
       </div>
 
       {/* Balance Card */}
