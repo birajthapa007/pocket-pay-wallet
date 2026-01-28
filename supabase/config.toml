@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.cards]
 verify_jwt = false
+
+[functions.banking]
+verify_jwt = false
