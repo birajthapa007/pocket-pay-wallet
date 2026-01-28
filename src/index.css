@@ -77,9 +77,16 @@
     @apply border-border;
   }
 
+  html, body {
+    overflow-x: hidden;
+    overscroll-behavior: none;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
     font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   html {
@@ -206,9 +213,11 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* Screen container - mobile optimized */
+  /* Screen container - mobile optimized, no horizontal scroll */
   .screen-container {
-    @apply min-h-screen max-w-md mx-auto px-4 sm:px-5 py-5 sm:py-6;
+    @apply max-w-md mx-auto px-4 py-5;
+    min-height: 100dvh; /* Use dynamic viewport height for mobile */
+    overflow-x: hidden;
   }
 
   /* Bottom navigation - touch friendly */
