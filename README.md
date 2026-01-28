@@ -1,73 +1,121 @@
-# Welcome to your Lovable project
+# Pocket Pay
 
-## Project info
+A modern, mobile-first digital wallet application built with React, TypeScript, and Supabase.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+![Pocket Pay](public/og-image.png)
 
-## How can I edit this code?
+## Features
 
-There are several ways of editing your application.
+- 💸 **Send & Receive Money** - Instant P2P transfers with QR code support
+- 💳 **Virtual Cards** - Generate and manage virtual debit cards
+- 🏦 **Bank Integration** - Deposit and withdraw with simulated bank accounts
+- 📊 **Insights** - Spending analytics and transaction history
+- 🛡️ **Smart Security** - Rule-based risk detection with user-friendly confirmation flows
+- 📱 **Mobile-First** - Optimized for mobile devices with premium animations
 
-**Use Lovable**
+## Tech Stack
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+- **Frontend**: React 18, TypeScript, Vite
+- **Styling**: Tailwind CSS, shadcn/ui
+- **Backend**: Supabase (PostgreSQL, Edge Functions, Auth)
+- **State Management**: TanStack Query
+- **Animations**: Framer Motion
 
-Changes made via Lovable will be committed automatically to this repo.
+## Getting Started
 
-**Use your preferred IDE**
+### Prerequisites
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+- Node.js 18+ 
+- npm or bun
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### Installation
 
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
+```bash
+# Clone the repository
 git clone <YOUR_GIT_URL>
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# Navigate to project directory
+cd pocket-pay
 
-# Step 3: Install the necessary dependencies.
-npm i
+# Install dependencies
+npm install
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+### Environment Variables
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Create a `.env` file with:
 
-**Use GitHub Codespaces**
+```env
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_anon_key
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Project Structure
 
-## What technologies are used for this project?
+```
+src/
+├── components/
+│   ├── screens/          # Main app screens
+│   ├── navigation/       # Navigation components
+│   ├── ui/               # shadcn/ui components
+│   └── wallet/           # Wallet-specific components
+├── hooks/                # Custom React hooks
+├── services/             # API service layer
+├── types/                # TypeScript types
+└── pages/                # Route pages
 
-This project is built with:
+supabase/
+└── functions/            # Edge Functions
+    ├── wallet/           # Balance, lookup
+    ├── transfers/        # Send money
+    ├── requests/         # Money requests
+    ├── transactions/     # History, insights
+    ├── cards/            # Virtual cards
+    └── banking/          # Deposit/withdraw
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+docs/
+├── BACKEND_DOCUMENTATION.md    # API documentation
+└── BACKEND_REFERENCE_PYTHON.md # Python migration guide
+```
 
-## How can I deploy this project?
+## Architecture
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+### Ledger-Based Accounting
 
-## Can I connect a custom domain to my Lovable project?
+Wallet balances are calculated from an append-only ledger, not stored directly. This ensures:
+- Complete audit trail
+- Data integrity
+- Easy reconciliation
 
-Yes, you can!
+### Payment Intent Pattern
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+Transactions represent the *intent* to move money. Actual balance changes only occur when ledger entries are created, enabling:
+- Multi-step confirmation flows
+- Risk rule evaluation
+- Cancellation before completion
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+### Risk Rules
+
+Transfers are automatically flagged for confirmation if:
+- Amount exceeds $500
+- First transfer to a new recipient  
+- 5+ transfers in 60 minutes
+
+## API Documentation
+
+See [BACKEND_DOCUMENTATION.md](docs/BACKEND_DOCUMENTATION.md) for complete API reference.
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License.
