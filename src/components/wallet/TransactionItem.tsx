@@ -33,7 +33,7 @@ const TransactionItem = React.forwardRef<HTMLDivElement, TransactionItemProps>(
     const getIconStyle = () => {
       // Status takes priority for visual treatment
       if (status === 'blocked') return 'bg-destructive-soft text-destructive';
-      if (status === 'pending') return 'bg-warning-soft text-warning';
+      if (status === 'pending_confirmation') return 'bg-warning-soft text-warning';
       // Then type-based styling
       if (type === 'send') return 'bg-secondary text-foreground';
       if (type === 'receive') return 'bg-success-soft text-success';
@@ -43,7 +43,7 @@ const TransactionItem = React.forwardRef<HTMLDivElement, TransactionItemProps>(
 
     const getAmountStyle = () => {
       if (status === 'blocked') return 'text-destructive line-through';
-      if (status === 'pending') return 'text-warning';
+      if (status === 'pending_confirmation') return 'text-warning';
       if (type === 'receive') return 'text-success';
       return 'text-foreground';
     };
@@ -56,7 +56,7 @@ const TransactionItem = React.forwardRef<HTMLDivElement, TransactionItemProps>(
           </div>
         );
       }
-      if (status === 'pending') {
+      if (status === 'pending_confirmation') {
         return (
           <div className="w-4 h-4 rounded-full bg-warning flex items-center justify-center">
             <Clock className="w-2.5 h-2.5 text-white" strokeWidth={3} />
@@ -76,7 +76,7 @@ const TransactionItem = React.forwardRef<HTMLDivElement, TransactionItemProps>(
     const getStatusBadge = () => {
       if (status === 'completed') return null;
       
-      if (status === 'pending') {
+      if (status === 'pending_confirmation') {
         return (
           <span className="text-[10px] px-2 py-0.5 rounded-full bg-warning-soft text-warning font-medium flex items-center gap-1">
             <Clock className="w-3 h-3" />
@@ -107,7 +107,7 @@ const TransactionItem = React.forwardRef<HTMLDivElement, TransactionItemProps>(
           "transaction-item relative",
           onClick && "cursor-pointer active:scale-[0.98]",
           status === 'blocked' && "border-destructive/20",
-          status === 'pending' && "border-warning/20"
+          status === 'pending_confirmation' && "border-warning/20"
         )}
       >
         {/* Icon with status indicator */}

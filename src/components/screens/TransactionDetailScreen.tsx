@@ -42,7 +42,7 @@ const TransactionDetailScreen = React.forwardRef<HTMLDivElement, TransactionDeta
             description: 'Completed instantly',
             microcopy: 'Protected by Pocket Pay security',
           };
-        case 'pending':
+        case 'pending_confirmation':
           return {
             icon: Clock,
             label: 'Processing',
