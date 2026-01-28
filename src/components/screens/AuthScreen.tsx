@@ -104,7 +104,7 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
           return;
         }
         
-        const { error: otpError } = await authApi.sendOtpEmail(
+        const { error: otpError, testCode } = await authApi.sendOtpEmail(
           email,
           mode === 'signup' ? 'signup' : 'login',
           mode === 'signup' ? { name: getFullName(), username: username.toLowerCase().trim() } : undefined
@@ -112,7 +112,12 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
         if (otpError) {
           setError(otpError);
         } else {
-          setSuccessMessage(`Verification code sent to ${email}`);
+          // Show test code if email delivery failed (Resend domain not verified)
+          if (testCode) {
+            setSuccessMessage(`Email couldn't be sent. Use test code: ${testCode}`);
+          } else {
+            setSuccessMessage(`Verification code sent to ${email}`);
+          }
           setStep('otp');
         }
       } else {

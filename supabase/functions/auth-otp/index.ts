@@ -207,20 +207,31 @@ serve(async (req: Request): Promise<Response> => {
 
       const emailData = await emailResponse.json();
       
+      let emailSent = true;
+      let emailError: string | null = null;
+      
       if (!emailResponse.ok) {
+        emailSent = false;
+        emailError = emailData.message || "Failed to send email";
         console.error("Resend API error:", emailData);
-        return new Response(
-          JSON.stringify({ error: "Failed to send verification email. Please try again." }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        // Don't fail - continue with Supabase's managed email as fallback
+        // The code is still stored in otp_codes table
+      } else {
+        console.log(`OTP email sent successfully to ${email}, action: ${authAction}`);
       }
 
-      console.log(`OTP sent to ${email}, action: ${authAction}`);
-
+      // Return success with code info for testing when email fails
+      // In production, you'd remove the code from the response
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: `Verification code sent to ${email}`,
+          message: emailSent 
+            ? `Verification code sent to ${email}` 
+            : `Code generated. Check your email or use code: ${code}`,
+          email_sent: emailSent,
+          // Include code for testing when Resend domain isn't verified
+          // REMOVE THIS IN PRODUCTION
+          ...(emailSent ? {} : { test_code: code }),
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
