@@ -32,12 +32,34 @@ export interface InsightData {
   transactionCount: number;
 }
 
+export interface UserSettings {
+  notifications: {
+    transactions: boolean;
+    security: boolean;
+    marketing: boolean;
+  };
+  security: {
+    biometric: boolean;
+    twoFactor: boolean;
+  };
+  privacy: {
+    hideBalance: boolean;
+    privateMode: boolean;
+  };
+}
+
 export type Screen = 
   | 'onboarding'
   | 'home'
   | 'send'
   | 'send-amount'
   | 'send-confirm'
+  | 'send-success'
   | 'receive'
   | 'history'
-  | 'insights';
+  | 'insights'
+  | 'settings'
+  | 'profile'
+  | 'security'
+  | 'notifications'
+  | 'help';

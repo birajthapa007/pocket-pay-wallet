@@ -1,66 +1,105 @@
-import { ArrowUpRight, ArrowDownLeft, ChevronRight } from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft, ChevronRight, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { WalletBalance, Transaction } from '@/types/wallet';
-import { formatCurrency, formatRelativeTime } from '@/data/mockData';
+import { WalletBalance, Transaction, User } from '@/types/wallet';
+import { formatCurrency } from '@/data/mockData';
 import TransactionItem from '@/components/wallet/TransactionItem';
+import { useState } from 'react';
 
 interface HomeScreenProps {
   balance: WalletBalance;
   transactions: Transaction[];
+  user: User;
+  hideBalance: boolean;
   onSend: () => void;
   onReceive: () => void;
   onViewHistory: () => void;
+  onOpenProfile: () => void;
 }
 
-const HomeScreen = ({ balance, transactions, onSend, onReceive, onViewHistory }: HomeScreenProps) => {
+const HomeScreen = ({ 
+  balance, 
+  transactions, 
+  user, 
+  hideBalance: initialHideBalance,
+  onSend, 
+  onReceive, 
+  onViewHistory,
+  onOpenProfile 
+}: HomeScreenProps) => {
+  const [hideBalance, setHideBalance] = useState(initialHideBalance);
   const dollars = Math.floor(balance.available);
   const cents = Math.round((balance.available - dollars) * 100);
+
+  const getInitials = (name: string) => {
+    return name.split(' ').map((n) => n[0]).join('').toUpperCase();
+  };
 
   return (
     <div className="screen-container animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6">
         <div>
-          <p className="text-muted-foreground text-sm font-medium">Your Balance</p>
+          <p className="text-muted-foreground text-sm">Welcome back,</p>
+          <p className="text-lg font-semibold">{user.name.split(' ')[0]}</p>
         </div>
-        <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
-          <span className="text-lg font-bold text-primary-foreground">A</span>
-        </div>
+        <button 
+          onClick={onOpenProfile}
+          className="w-11 h-11 rounded-full bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-primary-foreground font-semibold shadow-glow-sm"
+        >
+          {getInitials(user.name)}
+        </button>
       </div>
 
       {/* Balance Card */}
-      <div className="wallet-card mb-8 text-primary-foreground">
+      <div className="wallet-card mb-6">
         <div className="relative z-10">
-          <div className="flex items-baseline gap-1 mb-4">
-            <span className="text-lg opacity-80">$</span>
-            <span className="balance-display">{dollars.toLocaleString()}</span>
-            <span className="balance-cents">.{cents.toString().padStart(2, '0')}</span>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm text-muted-foreground">Available Balance</p>
+            <button 
+              onClick={() => setHideBalance(!hideBalance)}
+              className="p-2 rounded-full hover:bg-white/10 transition-colors"
+            >
+              {hideBalance ? (
+                <EyeOff className="w-4 h-4 text-muted-foreground" />
+              ) : (
+                <Eye className="w-4 h-4 text-muted-foreground" />
+              )}
+            </button>
           </div>
           
-          {balance.pending > 0 && (
-            <p className="text-sm opacity-70">
-              +{formatCurrency(balance.pending)} pending
-            </p>
+          <div className="flex items-baseline gap-1 mb-3">
+            <span className="text-xl text-muted-foreground">$</span>
+            {hideBalance ? (
+              <span className="balance-display">••••••</span>
+            ) : (
+              <>
+                <span className="balance-display">{dollars.toLocaleString()}</span>
+                <span className="balance-cents">.{cents.toString().padStart(2, '0')}</span>
+              </>
+            )}
+          </div>
+          
+          {balance.pending > 0 && !hideBalance && (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-warning-soft text-sm">
+              <span className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" />
+              <span className="text-warning-foreground">{formatCurrency(balance.pending)} pending</span>
+            </div>
           )}
         </div>
-
-        {/* Decorative elements */}
-        <div className="absolute top-4 right-4 w-24 h-24 rounded-full bg-white/10 blur-xl" />
-        <div className="absolute bottom-0 right-8 w-16 h-16 rounded-full bg-white/5" />
       </div>
 
       {/* Action Buttons */}
-      <div className="grid grid-cols-2 gap-4 mb-8">
+      <div className="grid grid-cols-2 gap-3 mb-8">
         <Button
           variant="send"
           size="full"
           onClick={onSend}
           className="flex items-center justify-center gap-3"
         >
-          <div className="w-10 h-10 rounded-full bg-primary-foreground/20 flex items-center justify-center">
+          <div className="w-9 h-9 rounded-full bg-primary-foreground/20 flex items-center justify-center">
             <ArrowUpRight className="w-5 h-5" />
           </div>
-          <span className="text-lg font-semibold">Send</span>
+          <span className="font-semibold">Send</span>
         </Button>
         
         <Button
@@ -69,10 +108,10 @@ const HomeScreen = ({ balance, transactions, onSend, onReceive, onViewHistory }:
           onClick={onReceive}
           className="flex items-center justify-center gap-3"
         >
-          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+          <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center">
             <ArrowDownLeft className="w-5 h-5 text-primary" />
           </div>
-          <span className="text-lg font-semibold">Receive</span>
+          <span className="font-semibold">Receive</span>
         </Button>
       </div>
 
@@ -91,12 +130,19 @@ const HomeScreen = ({ balance, transactions, onSend, onReceive, onViewHistory }:
 
         <div className="space-y-2">
           {transactions.length > 0 ? (
-            transactions.map((transaction) => (
-              <TransactionItem key={transaction.id} transaction={transaction} />
+            transactions.map((transaction, i) => (
+              <div 
+                key={transaction.id}
+                className="animate-fade-in"
+                style={{ animationDelay: `${i * 50}ms` }}
+              >
+                <TransactionItem transaction={transaction} />
+              </div>
             ))
           ) : (
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="text-center py-12 text-muted-foreground">
               <p>No transactions yet</p>
+              <p className="text-sm mt-1">Send or receive money to get started</p>
             </div>
           )}
         </div>

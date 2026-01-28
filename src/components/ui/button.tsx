@@ -9,19 +9,18 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90 shadow-wallet",
+        default: "bg-primary text-primary-foreground hover:bg-primary/90 shadow-glow-sm",
         destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        outline: "border-2 border-primary bg-transparent text-primary hover:bg-primary hover:text-primary-foreground",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
+        outline: "border-2 border-primary/50 bg-transparent text-primary hover:bg-primary hover:text-primary-foreground",
+        secondary: "bg-secondary text-secondary-foreground hover:bg-muted border border-border/50",
+        ghost: "hover:bg-secondary hover:text-foreground",
         link: "text-primary underline-offset-4 hover:underline",
-        // Pocket Pay specific variants
-        wallet: "bg-primary text-primary-foreground shadow-wallet hover:shadow-glow",
-        action: "bg-secondary text-foreground hover:bg-accent flex-col gap-2 h-auto py-4",
-        send: "bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg",
-        receive: "bg-secondary text-foreground border-2 border-primary/20 hover:border-primary/40",
+        // Premium Pocket Pay variants
+        wallet: "bg-gradient-to-r from-primary to-primary/80 text-primary-foreground shadow-glow hover:shadow-glow",
+        send: "bg-primary text-primary-foreground hover:bg-primary/90 shadow-glow-sm",
+        receive: "bg-secondary text-foreground border border-primary/30 hover:border-primary/50",
         confirm: "bg-success text-success-foreground hover:bg-success/90",
-        danger: "bg-destructive-soft text-destructive hover:bg-destructive hover:text-destructive-foreground",
+        danger: "bg-destructive-soft text-destructive hover:bg-destructive hover:text-destructive-foreground border border-destructive/20",
       },
       size: {
         default: "h-12 px-6 py-3",
