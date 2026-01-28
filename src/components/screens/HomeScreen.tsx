@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowUpRight, ArrowDownLeft, HandCoins, ChevronRight, Eye, EyeOff, CreditCard } from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft, HandCoins, ChevronRight, Eye, EyeOff, CreditCard, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { WalletBalance, Transaction, User, Screen } from '@/types/wallet';
 import { formatCurrency } from '@/data/mockData';
@@ -86,15 +86,21 @@ const HomeScreen = React.forwardRef<HTMLDivElement, HomeScreenProps>(({
             )}
           </div>
           
-          {/* Card Quick Access */}
-          <button 
-            onClick={() => onNavigate('cards')}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 transition-colors active:scale-[0.98]"
-          >
-            <CreditCard className="w-4 h-4 text-primary" />
-            <span className="text-sm text-muted-foreground">View Cards</span>
-            <ChevronRight className="w-4 h-4 text-muted-foreground ml-auto" />
-          </button>
+          {/* Security Badge + Card Quick Access */}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-success-soft/50">
+              <ShieldCheck className="w-3.5 h-3.5 text-success" />
+              <span className="text-xs text-success font-medium">Protected</span>
+            </div>
+            <button 
+              onClick={() => onNavigate('cards')}
+              className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 transition-colors active:scale-[0.98]"
+            >
+              <CreditCard className="w-4 h-4 text-primary" />
+              <span className="text-sm text-muted-foreground">View Cards</span>
+              <ChevronRight className="w-4 h-4 text-muted-foreground ml-auto" />
+            </button>
+          </div>
         </div>
       </div>
 

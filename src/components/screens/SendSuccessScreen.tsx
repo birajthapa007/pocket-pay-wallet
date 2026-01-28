@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check } from 'lucide-react';
+import { Check, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { User } from '@/types/wallet';
 import { formatCurrency } from '@/data/mockData';
@@ -33,7 +33,7 @@ const SendSuccessScreen = React.forwardRef<HTMLDivElement, SendSuccessScreenProp
         </p>
 
         {/* Details */}
-        <div className="w-full max-w-xs bg-card rounded-2xl p-5 sm:p-6 border border-border/50 mb-8">
+        <div className="w-full max-w-xs bg-card rounded-2xl p-5 sm:p-6 border border-border/50 mb-6">
           <div className="flex items-center justify-center gap-3 mb-4">
             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-primary-foreground font-semibold">
               {getInitials(recipient.name)}
@@ -46,6 +46,12 @@ const SendSuccessScreen = React.forwardRef<HTMLDivElement, SendSuccessScreenProp
           <div className="text-center pt-4 border-t border-border/50">
             <p className="text-2xl sm:text-3xl font-bold text-foreground">{formatCurrency(amount)}</p>
           </div>
+        </div>
+
+        {/* Security Microcopy */}
+        <div className="flex items-center justify-center gap-2 mb-8 px-4 py-2 bg-success-soft rounded-full">
+          <ShieldCheck className="w-4 h-4 text-success" />
+          <span className="text-xs font-medium text-success">Secure transaction complete</span>
         </div>
 
         {/* Done Button */}
