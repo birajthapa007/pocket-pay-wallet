@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ArrowLeft, Delete } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { User } from '@/types/wallet';
+import { walletBalance } from '@/data/mockData';
 
 interface SendAmountScreenProps {
   recipient: User;
@@ -21,7 +22,6 @@ const SendAmountScreen = ({ recipient, onSetAmount, onBack }: SendAmountScreenPr
     if (amount === '0' && key !== '.') {
       setAmount(key);
     } else {
-      // Limit decimal places to 2
       if (amount.includes('.') && amount.split('.')[1].length >= 2) return;
       setAmount((prev) => prev + key);
     }
@@ -38,24 +38,27 @@ const SendAmountScreen = ({ recipient, onSetAmount, onBack }: SendAmountScreenPr
     return name.split(' ').map((n) => n[0]).join('').toUpperCase();
   };
 
+  const numAmount = parseFloat(amount) || 0;
+  const isOverBalance = numAmount > walletBalance.available;
+
   const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'delete'];
 
   return (
-    <div className="screen-container flex flex-col animate-fade-in">
+    <div className="screen-container flex flex-col animate-fade-in min-h-screen">
       {/* Header */}
       <div className="flex items-center gap-4 mb-8">
         <button
           onClick={onBack}
-          className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center"
+          className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center hover:bg-muted transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-semibold">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-primary-foreground font-semibold">
             {getInitials(recipient.name)}
           </div>
           <div>
-            <p className="font-semibold">{recipient.name}</p>
+            <p className="font-semibold text-foreground">{recipient.name}</p>
             <p className="text-sm text-muted-foreground">@{recipient.username}</p>
           </div>
         </div>
@@ -66,18 +69,21 @@ const SendAmountScreen = ({ recipient, onSetAmount, onBack }: SendAmountScreenPr
         <div className="text-center">
           <div className="flex items-baseline justify-center gap-1">
             <span className="text-3xl font-bold text-muted-foreground">$</span>
-            <span className="text-6xl font-bold tabular-nums">
+            <span className={`text-6xl font-bold tabular-nums ${isOverBalance ? 'text-destructive' : 'text-foreground'}`}>
               {parseFloat(amount).toLocaleString('en-US', {
                 minimumFractionDigits: 0,
                 maximumFractionDigits: 2,
               })}
             </span>
           </div>
+          {isOverBalance && (
+            <p className="text-sm text-destructive mt-2 animate-fade-in">Exceeds available balance</p>
+          )}
         </div>
       </div>
 
       {/* Keypad */}
-      <div className="grid grid-cols-3 gap-2 mb-6">
+      <div className="grid grid-cols-3 gap-1 mb-6 max-w-xs mx-auto w-full">
         {keys.map((key) => (
           <button
             key={key}
@@ -97,7 +103,7 @@ const SendAmountScreen = ({ recipient, onSetAmount, onBack }: SendAmountScreenPr
       <Button
         size="full"
         onClick={handleContinue}
-        disabled={parseFloat(amount) <= 0}
+        disabled={numAmount <= 0 || isOverBalance}
       >
         Continue
       </Button>

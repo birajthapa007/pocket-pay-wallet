@@ -1,4 +1,4 @@
-import { Home, History, BarChart3 } from 'lucide-react';
+import { Home, History, BarChart3, Settings } from 'lucide-react';
 import { Screen } from '@/types/wallet';
 import { cn } from '@/lib/utils';
 
@@ -12,23 +12,26 @@ const BottomNav = ({ currentScreen, onNavigate }: BottomNavProps) => {
     { screen: 'home' as Screen, icon: Home, label: 'Home' },
     { screen: 'history' as Screen, icon: History, label: 'Activity' },
     { screen: 'insights' as Screen, icon: BarChart3, label: 'Insights' },
+    { screen: 'settings' as Screen, icon: Settings, label: 'Settings' },
   ];
 
   return (
     <nav className="bottom-nav">
-      {navItems.map(({ screen, icon: Icon, label }) => (
-        <button
-          key={screen}
-          onClick={() => onNavigate(screen)}
-          className={cn(
-            'nav-item',
-            currentScreen === screen && 'active'
-          )}
-        >
-          <Icon className="w-6 h-6" />
-          <span className="text-xs font-medium">{label}</span>
-        </button>
-      ))}
+      <div className="bottom-nav-inner max-w-md mx-auto">
+        {navItems.map(({ screen, icon: Icon, label }) => (
+          <button
+            key={screen}
+            onClick={() => onNavigate(screen)}
+            className={cn(
+              'nav-item',
+              currentScreen === screen && 'active'
+            )}
+          >
+            <Icon className="w-5 h-5" />
+            <span className="text-[11px] font-medium">{label}</span>
+          </button>
+        ))}
+      </div>
     </nav>
   );
 };

@@ -1,4 +1,4 @@
-import { TrendingUp, TrendingDown, Shield, Wallet } from 'lucide-react';
+import { TrendingUp, TrendingDown, Shield, Activity, Sparkles } from 'lucide-react';
 import { Transaction } from '@/types/wallet';
 import { formatCurrency } from '@/data/mockData';
 
@@ -7,7 +7,6 @@ interface InsightsScreenProps {
 }
 
 const InsightsScreen = ({ transactions }: InsightsScreenProps) => {
-  // Calculate insights from transactions
   const currentMonth = new Date().getMonth();
   const currentYear = new Date().getFullYear();
 
@@ -27,82 +26,92 @@ const InsightsScreen = ({ transactions }: InsightsScreenProps) => {
   const blockedTransactions = transactions.filter((t) => t.status === 'blocked');
   const fraudBlocked = blockedTransactions.reduce((sum, t) => sum + t.amount, 0);
 
-  const insights = [
+  const monthName = new Date().toLocaleDateString('en-US', { month: 'long' });
+
+  const stats = [
     {
       icon: TrendingDown,
-      label: 'Spent this month',
+      label: 'Spent',
       value: formatCurrency(monthlySpent),
       color: 'text-foreground',
       bgColor: 'bg-secondary',
+      iconColor: 'text-muted-foreground',
     },
     {
       icon: TrendingUp,
-      label: 'Received this month',
+      label: 'Received',
       value: formatCurrency(monthlyReceived),
       color: 'text-success',
       bgColor: 'bg-success-soft',
-    },
-    {
-      icon: Shield,
-      label: 'We protected',
-      value: formatCurrency(fraudBlocked),
-      color: 'text-primary',
-      bgColor: 'bg-primary-soft',
-      subtitle: fraudBlocked > 0 ? 'Blocked suspicious activity' : 'No threats detected',
-    },
-    {
-      icon: Wallet,
-      label: 'Total transactions',
-      value: monthlyTransactions.length.toString(),
-      color: 'text-info',
-      bgColor: 'bg-info-soft',
-      subtitle: 'This month',
+      iconColor: 'text-success',
     },
   ];
-
-  const monthName = new Date().toLocaleDateString('en-US', { month: 'long' });
 
   return (
     <div className="screen-container animate-fade-in">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold">Insights</h1>
-        <p className="text-muted-foreground">{monthName} summary</p>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold mb-1">Insights</h1>
+        <p className="text-muted-foreground text-sm">{monthName} summary</p>
       </div>
 
-      {/* Insight Cards */}
-      <div className="space-y-4">
-        {insights.map((insight, index) => (
-          <div key={index} className="insight-card">
-            <div className="flex items-center gap-4">
-              <div className={`w-12 h-12 rounded-xl ${insight.bgColor} flex items-center justify-center`}>
-                <insight.icon className={`w-6 h-6 ${insight.color}`} />
-              </div>
-              <div className="flex-1">
-                <p className="text-sm text-muted-foreground">{insight.label}</p>
-                <p className={`text-2xl font-bold ${insight.color}`}>{insight.value}</p>
-                {insight.subtitle && (
-                  <p className="text-xs text-muted-foreground">{insight.subtitle}</p>
-                )}
-              </div>
+      {/* Quick Stats */}
+      <div className="grid grid-cols-2 gap-3 mb-6">
+        {stats.map((stat, i) => (
+          <div 
+            key={i} 
+            className="insight-card animate-fade-in"
+            style={{ animationDelay: `${i * 50}ms` }}
+          >
+            <div className={`w-10 h-10 rounded-xl ${stat.bgColor} flex items-center justify-center mb-3`}>
+              <stat.icon className={`w-5 h-5 ${stat.iconColor}`} />
             </div>
+            <p className="text-xs text-muted-foreground mb-1">{stat.label}</p>
+            <p className={`text-xl font-bold ${stat.color}`}>{stat.value}</p>
           </div>
         ))}
       </div>
 
-      {/* Security Message */}
-      <div className="mt-8 p-5 bg-primary-soft rounded-2xl">
-        <div className="flex items-start gap-3">
-          <Shield className="w-6 h-6 text-primary flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold text-foreground mb-1">
-              Your money is protected
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Pocket Pay uses bank-level encryption and real-time fraud detection to keep your funds safe.
+      {/* Protection Card */}
+      <div 
+        className="bg-gradient-to-br from-primary-soft to-primary/5 rounded-2xl p-5 border border-primary/20 mb-6 animate-fade-in"
+        style={{ animationDelay: '100ms' }}
+      >
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
+            <Shield className="w-6 h-6 text-primary" />
+          </div>
+          <div className="flex-1">
+            <p className="font-semibold text-foreground mb-1">Smart Protection</p>
+            <p className="text-2xl font-bold text-primary">{formatCurrency(fraudBlocked)}</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {fraudBlocked > 0 ? 'Blocked from suspicious activity' : 'No threats detected'}
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Activity Summary */}
+      <div 
+        className="insight-card animate-fade-in"
+        style={{ animationDelay: '150ms' }}
+      >
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-info-soft flex items-center justify-center">
+            <Activity className="w-6 h-6 text-info" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm text-muted-foreground">Total transactions</p>
+            <p className="text-2xl font-bold text-foreground">{monthlyTransactions.length}</p>
+            <p className="text-xs text-muted-foreground">This month</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Security Footer */}
+      <div className="mt-8 flex items-center justify-center gap-2 text-muted-foreground">
+        <Sparkles className="w-4 h-4 text-primary" />
+        <span className="text-sm">Powered by AI fraud detection</span>
       </div>
     </div>
   );
