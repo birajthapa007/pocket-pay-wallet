@@ -1,1 +1,16 @@
 project_id = "onlhhefpjkcjkscsnoqk"
+
+[functions.wallet]
+verify_jwt = false
+
+[functions.transfers]
+verify_jwt = false
+
+[functions.requests]
+verify_jwt = false
+
+[functions.transactions]
+verify_jwt = false
+
+[functions.cards]
+verify_jwt = false
