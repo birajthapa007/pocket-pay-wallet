@@ -487,17 +487,9 @@ async function completeTransfer(
       return { success: false, error: 'Failed to update transaction status' }
     }
 
-    // Create receive transaction for recipient's history
-    await supabase
-      .from('transactions')
-      .insert({
-        type: 'receive',
-        sender_wallet_id: senderWalletId,
-        recipient_wallet_id: recipientWalletId,
-        amount: amount,
-        description: description,
-        status: 'completed'
-      })
+    // NOTE: We only create ONE transaction record per transfer.
+    // The frontend shows it as 'send' for sender and 'receive' for recipient
+    // based on the is_outgoing flag computed from wallet IDs.
 
     return { success: true }
   } catch (error) {
