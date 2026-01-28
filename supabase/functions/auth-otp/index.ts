@@ -316,21 +316,19 @@ serve(async (req: Request): Promise<Response> => {
         );
       }
 
-      // Extract token_hash from the action_link
+      // Extract token from the action_link (it's called "token" not "token_hash")
       const actionLink = linkData.properties?.action_link || "";
-      console.log("Action link generated:", actionLink);
-      
       const urlObj = new URL(actionLink);
-      const tokenHash = urlObj.searchParams.get("token_hash");
+      const token = urlObj.searchParams.get("token");
       
-      console.log("Token hash extracted:", tokenHash ? "found" : "not found");
+      console.log("Token extracted:", token ? "found" : "not found");
       console.log("Generated token for:", email.toLowerCase());
 
       return new Response(
         JSON.stringify({ 
           success: true,
           verified: true,
-          token_hash: tokenHash,
+          token: token,
           type: "magiclink",
           email: email.toLowerCase(),
           message: authAction === "signup" ? "Account created successfully" : "Login successful",
