@@ -157,6 +157,42 @@ export type Database = {
           },
         ]
       }
+      otp_codes: {
+        Row: {
+          action: string
+          code: string
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          metadata: Json | null
+          phone: string | null
+          verified_at: string | null
+        }
+        Insert: {
+          action?: string
+          code: string
+          created_at?: string
+          email: string
+          expires_at: string
+          id?: string
+          metadata?: Json | null
+          phone?: string | null
+          verified_at?: string | null
+        }
+        Update: {
+          action?: string
+          code?: string
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          metadata?: Json | null
+          phone?: string | null
+          verified_at?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null

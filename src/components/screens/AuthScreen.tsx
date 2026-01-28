@@ -104,7 +104,11 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
           return;
         }
         
-        const { error: otpError } = await authApi.sendOtpEmail(email);
+        const { error: otpError } = await authApi.sendOtpEmail(
+          email,
+          mode === 'signup' ? 'signup' : 'login',
+          mode === 'signup' ? { name: getFullName(), username: username.toLowerCase().trim() } : undefined
+        );
         if (otpError) {
           setError(otpError);
         } else {

@@ -360,22 +360,39 @@ export const cardsApi = {
 // ==========================================
 
 export const authApi = {
-  // Send OTP to email
-  async sendOtpEmail(email: string): Promise<{ error: string | null }> {
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        shouldCreateUser: true,
-      },
-    });
-    
-    if (error) {
-      return { error: error.message };
+  // Send OTP to email using custom edge function (shows code in email)
+  async sendOtpEmail(email: string, action: 'signup' | 'login' | 'recovery' = 'login', metadata?: { name?: string; username?: string }): Promise<{ error: string | null }> {
+    try {
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/auth-otp?action=send`;
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({
+          email,
+          action,
+          name: metadata?.name,
+          username: metadata?.username,
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        return { error: data.error || 'Failed to send verification code' };
+      }
+      
+      return { error: null };
+    } catch (err) {
+      console.error('Send OTP error:', err);
+      return { error: 'Failed to send verification code' };
     }
-    return { error: null };
   },
 
-  // Send OTP to phone
+  // Send OTP to phone (still uses Supabase's built-in SMS)
   async sendOtpPhone(phone: string): Promise<{ error: string | null }> {
     const { error } = await supabase.auth.signInWithOtp({
       phone,
@@ -398,47 +415,112 @@ export const authApi = {
     name: string;
     username: string;
   }): Promise<{ user: UserProfile | null; error: string | null }> {
-    const verifyParams = params.type === 'email' 
-      ? { email: params.contact, token: params.otp, type: 'email' as const }
-      : { phone: params.contact, token: params.otp, type: 'sms' as const };
-
-    const { data, error } = await supabase.auth.verifyOtp(verifyParams);
-
-    if (error) {
-      return { user: null, error: error.message };
-    }
-
-    // Update user metadata with name and username
-    if (data.user) {
-      await supabase.auth.updateUser({
-        data: {
-          name: params.name,
-          username: params.username,
+    try {
+      // First verify with our custom OTP
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/auth-otp?action=verify`;
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
+        body: JSON.stringify({
+          email: params.contact,
+          code: params.otp,
+          action: 'signup',
+        }),
       });
 
-      // Update profile in database
-      await supabase
-        .from('profiles')
-        .update({
+      const data = await response.json();
+      
+      if (!response.ok) {
+        return { user: null, error: data.error || 'Verification failed' };
+      }
+
+      // If we got a redirect URL, use it to complete the sign in
+      if (data.redirect_url) {
+        // Extract token from URL and verify
+        const redirectUrl = new URL(data.redirect_url);
+        const tokenHash = redirectUrl.searchParams.get('token_hash') || redirectUrl.hash.split('access_token=')[1]?.split('&')[0];
+        
+        if (tokenHash) {
+          // Try to exchange the token
+          const { data: sessionData, error: sessionError } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: 'magiclink',
+          });
+          
+          if (!sessionError && sessionData.user) {
+            // Update profile
+            await supabase
+              .from('profiles')
+              .update({
+                name: params.name,
+                username: params.username,
+                email: params.type === 'email' ? params.contact : null,
+                phone: params.type === 'phone' ? params.contact : null,
+              })
+              .eq('id', sessionData.user.id);
+
+            return {
+              user: {
+                id: sessionData.user.id,
+                name: params.name,
+                username: params.username,
+                email: params.type === 'email' ? params.contact : undefined,
+                phone: params.type === 'phone' ? params.contact : undefined,
+              },
+              error: null,
+            };
+          }
+        }
+      }
+
+      // Fallback: try Supabase's built-in OTP verification
+      const verifyParams = params.type === 'email' 
+        ? { email: params.contact, token: params.otp, type: 'email' as const }
+        : { phone: params.contact, token: params.otp, type: 'sms' as const };
+
+      const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp(verifyParams);
+
+      if (verifyError) {
+        return { user: null, error: verifyError.message };
+      }
+
+      if (verifyData.user) {
+        await supabase.auth.updateUser({
+          data: {
+            name: params.name,
+            username: params.username,
+          },
+        });
+
+        await supabase
+          .from('profiles')
+          .update({
+            name: params.name,
+            username: params.username,
+            email: params.type === 'email' ? params.contact : null,
+            phone: params.type === 'phone' ? params.contact : null,
+          })
+          .eq('id', verifyData.user.id);
+      }
+
+      return {
+        user: verifyData.user ? {
+          id: verifyData.user.id,
           name: params.name,
           username: params.username,
-          email: params.type === 'email' ? params.contact : null,
-          phone: params.type === 'phone' ? params.contact : null,
-        })
-        .eq('id', data.user.id);
+          email: params.type === 'email' ? params.contact : undefined,
+          phone: params.type === 'phone' ? params.contact : undefined,
+        } : null,
+        error: null,
+      };
+    } catch (err) {
+      console.error('Verify OTP error:', err);
+      return { user: null, error: 'Verification failed' };
     }
-
-    return {
-      user: data.user ? {
-        id: data.user.id,
-        name: params.name,
-        username: params.username,
-        email: params.type === 'email' ? params.contact : undefined,
-        phone: params.type === 'phone' ? params.contact : undefined,
-      } : null,
-      error: null,
-    };
   },
 
   // Verify OTP for login
