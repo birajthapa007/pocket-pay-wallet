@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Screen, User, Transaction, UserSettings, WalletBalance } from '@/types/wallet';
+import { Screen, User, Transaction, WalletBalance } from '@/types/wallet';
 import { RecipientWithWallet } from '@/types/recipient';
 import { useAuth } from '@/hooks/useAuth';
 import { useWalletSummary, useTransactions, useContacts, useSendMoney, useCreateRequest, useLookupUser } from '@/hooks/useWallet';
+import { useSettings } from '@/hooks/useSettings';
 import { formatCurrency } from '@/data/mockData';
 import AuthScreen from '@/components/screens/AuthScreen';
 import OnboardingScreen from '@/components/screens/OnboardingScreen';
@@ -30,6 +31,7 @@ import BottomNav from '@/components/navigation/BottomNav';
 
 const Index = () => {
   const { isLoggedIn, isLoading: isAuthLoading, user, signOut, updateUser } = useAuth();
+  const { settings, updateSettings } = useSettings();
   const [currentScreen, setCurrentScreen] = useState<Screen>('auth');
   const [selectedRecipient, setSelectedRecipient] = useState<RecipientWithWallet | null>(null);
   const [selectedContact, setSelectedContact] = useState<User | null>(null);
@@ -39,11 +41,6 @@ const Index = () => {
   const [requestAmount, setRequestAmount] = useState<number>(0);
   const [requestNote, setRequestNote] = useState<string>('');
   const [lastTransaction, setLastTransaction] = useState<Transaction | null>(null);
-  const [settings, setSettings] = useState<UserSettings>({
-    notifications: { transactions: true, security: true, marketing: false },
-    security: { biometric: false, twoFactor: true },
-    privacy: { hideBalance: false, privateMode: false },
-  });
   const [previousScreen, setPreviousScreen] = useState<Screen>('home');
 
   // Fetch data from backend
@@ -219,9 +216,7 @@ const Index = () => {
     updateUser(updates);
   };
 
-  const handleUpdateSettings = (updates: Partial<UserSettings>) => {
-    setSettings({ ...settings, ...updates });
-  };
+  const handleUpdateSettings = updateSettings;
 
   const handleLogout = async () => {
     await signOut();

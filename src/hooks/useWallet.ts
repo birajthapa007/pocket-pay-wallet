@@ -7,11 +7,15 @@ import { toast } from '@/hooks/use-toast';
 function transformTransaction(tx: any): Transaction {
   // Use is_outgoing to determine the correct type for display
   // Backend always stores 'send' type, but we show 'receive' for the recipient
-  const isOutgoing = tx.is_outgoing;
+  const isOutgoing = tx.is_outgoing === true;
   const displayType = isOutgoing ? 'send' : 'receive';
   
-  // For outgoing: show recipient. For incoming: show sender
-  const displayPerson = isOutgoing ? tx.recipient : tx.sender;
+  // For outgoing transactions: the current user is sender, show recipient info
+  // For incoming transactions: the current user is recipient, show sender info
+  // We need to pass both to the Transaction object so UI can choose correctly
+  
+  // Get the counterparty (the other person in the transaction)
+  const counterparty = isOutgoing ? tx.recipient : tx.sender;
   
   return {
     id: tx.id,
@@ -19,20 +23,22 @@ function transformTransaction(tx: any): Transaction {
     amount: tx.amount,
     status: tx.status,
     description: tx.description,
-    recipient: isOutgoing && tx.recipient ? {
-      id: tx.recipient.id,
-      name: tx.recipient.name,
-      username: tx.recipient.username,
-      email: tx.recipient.email,
-      phone: tx.recipient.phone,
-    } : undefined,
-    sender: !isOutgoing && tx.sender ? {
-      id: tx.sender.id,
-      name: tx.sender.name,
-      username: tx.sender.username,
-      email: tx.sender.email,
-      phone: tx.sender.phone,
-    } : undefined,
+    // For outgoing: set recipient as the counterparty
+    recipient: isOutgoing ? (counterparty ? {
+      id: counterparty.id,
+      name: counterparty.name,
+      username: counterparty.username,
+      email: counterparty.email,
+      phone: counterparty.phone,
+    } : undefined) : undefined,
+    // For incoming: set sender as the counterparty
+    sender: !isOutgoing ? (counterparty ? {
+      id: counterparty.id,
+      name: counterparty.name,
+      username: counterparty.username,
+      email: counterparty.email,
+      phone: counterparty.phone,
+    } : undefined) : undefined,
     createdAt: new Date(tx.created_at),
     isRisky: tx.is_risky,
   };
