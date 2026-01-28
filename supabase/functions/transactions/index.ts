@@ -60,8 +60,8 @@ Deno.serve(async (req) => {
       )
     }
 
-    // GET /transactions?action=list - List all transactions
-    if (req.method === 'GET' && action === 'list') {
+    // GET /transactions or GET /transactions?action=list - List all transactions
+    if (req.method === 'GET' && (!action || action === 'list')) {
       const limit = parseInt(url.searchParams.get('limit') || '50')
       const offset = parseInt(url.searchParams.get('offset') || '0')
       const type = url.searchParams.get('type') // filter by type
