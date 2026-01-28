@@ -318,9 +318,12 @@ serve(async (req: Request): Promise<Response> => {
 
       // Extract token_hash from the action_link
       const actionLink = linkData.properties?.action_link || "";
+      console.log("Action link generated:", actionLink);
+      
       const urlObj = new URL(actionLink);
-      const tokenHash = urlObj.searchParams.get("token_hash") || urlObj.hash?.split("access_token=")[1]?.split("&")[0];
-
+      const tokenHash = urlObj.searchParams.get("token_hash");
+      
+      console.log("Token hash extracted:", tokenHash ? "found" : "not found");
       console.log("Generated token for:", email.toLowerCase());
 
       return new Response(
