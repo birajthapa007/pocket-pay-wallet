@@ -7,11 +7,12 @@ import { formatCurrency } from '@/data/mockData';
 interface SendSuccessScreenProps {
   recipient: User;
   amount: number;
+  note: string;
   onDone: () => void;
 }
 
 const SendSuccessScreen = React.forwardRef<HTMLDivElement, SendSuccessScreenProps>(
-  ({ recipient, amount, onDone }, ref) => {
+  ({ recipient, amount, note, onDone }, ref) => {
     const getInitials = (name: string) => {
       return name.split(' ').map((n) => n[0]).join('').toUpperCase();
     };
@@ -33,7 +34,7 @@ const SendSuccessScreen = React.forwardRef<HTMLDivElement, SendSuccessScreenProp
         </p>
 
         {/* Details */}
-        <div className="w-full max-w-xs bg-card rounded-2xl p-5 sm:p-6 border border-border/50 mb-6">
+        <div className="w-full max-w-xs bg-card rounded-2xl p-5 border border-border/50 mb-6">
           <div className="flex items-center justify-center gap-3 mb-4">
             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-primary-foreground font-semibold">
               {getInitials(recipient.name)}
@@ -43,8 +44,15 @@ const SendSuccessScreen = React.forwardRef<HTMLDivElement, SendSuccessScreenProp
               <p className="text-sm text-muted-foreground">@{recipient.username}</p>
             </div>
           </div>
-          <div className="text-center pt-4 border-t border-border/50">
-            <p className="text-2xl sm:text-3xl font-bold text-foreground">{formatCurrency(amount)}</p>
+          
+          <div className="text-center py-4 border-t border-border/50">
+            <p className="text-2xl font-bold text-foreground">{formatCurrency(amount)}</p>
+          </div>
+
+          {/* Payment reason */}
+          <div className="pt-3 border-t border-border/50">
+            <p className="text-xs text-muted-foreground mb-1">For</p>
+            <p className="text-sm text-foreground">"{note}"</p>
           </div>
         </div>
 

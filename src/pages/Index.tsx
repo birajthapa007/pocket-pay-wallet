@@ -30,6 +30,7 @@ const Index = () => {
   const [selectedContact, setSelectedContact] = useState<User | null>(null);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [sendAmount, setSendAmount] = useState<number>(0);
+  const [sendNote, setSendNote] = useState<string>('');
   const [requestAmount, setRequestAmount] = useState<number>(0);
   const [requestNote, setRequestNote] = useState<string>('');
   const [transactions, setTransactions] = useState<Transaction[]>(mockTransactions);
@@ -56,8 +57,9 @@ const Index = () => {
     setCurrentScreen('request-amount');
   };
 
-  const handleSetAmount = (amount: number) => {
+  const handleSetAmount = (amount: number, note: string) => {
     setSendAmount(amount);
+    setSendNote(note);
     setCurrentScreen('send-confirm');
   };
 
@@ -73,7 +75,7 @@ const Index = () => {
       type: 'send',
       amount: sendAmount,
       status: 'completed',
-      description: `Payment to ${selectedRecipient?.name}`,
+      description: sendNote,
       recipient: selectedRecipient!,
       createdAt: new Date(),
     };
@@ -84,6 +86,7 @@ const Index = () => {
   const handleSendComplete = () => {
     setSelectedRecipient(null);
     setSendAmount(0);
+    setSendNote('');
     setCurrentScreen('home');
   };
 
@@ -171,6 +174,7 @@ const Index = () => {
           <SendConfirmScreen
             recipient={selectedRecipient!}
             amount={sendAmount}
+            note={sendNote}
             onConfirm={handleConfirmSend}
             onBack={() => setCurrentScreen('send-amount')}
           />
@@ -180,6 +184,7 @@ const Index = () => {
           <SendSuccessScreen
             recipient={selectedRecipient!}
             amount={sendAmount}
+            note={sendNote}
             onDone={handleSendComplete}
           />
         );
