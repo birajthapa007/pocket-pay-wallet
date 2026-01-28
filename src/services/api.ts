@@ -107,16 +107,7 @@ async function apiCall<T>(
   
   const queryParams = new URLSearchParams({ action, ...params });
   
-  const { data, error } = await supabase.functions.invoke(functionName, {
-    method,
-    body: body ? JSON.stringify(body) : undefined,
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
-
-  // supabase.functions.invoke handles the URL construction
-  // We need to use a different approach - direct fetch
+  // Use direct fetch - supabase.functions.invoke doesn't support query params properly
   const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${functionName}?${queryParams}`;
   
   const response = await fetch(url, {
