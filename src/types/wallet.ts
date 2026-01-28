@@ -103,4 +103,6 @@ export type Screen =
   | 'transaction-detail'
   | 'scan'
   | 'deposit'
-  | 'withdraw';
+  | 'withdraw'
+  | 'terms'
+  | 'privacy';

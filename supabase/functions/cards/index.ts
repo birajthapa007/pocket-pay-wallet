@@ -127,8 +127,35 @@ Deno.serve(async (req) => {
         decryptedCvv = await decryptData(card.cvv_encrypted)
       } catch (decryptError) {
         console.error('Decryption error:', decryptError)
-        // If decryption fails, data may be in legacy plaintext format
-        // Return masked version for security
+        // If decryption fails, data may be in legacy plaintext format (not encrypted)
+        // Check if the stored value looks like a raw card number (all digits)
+        const storedNumber = card.card_number_encrypted
+        const storedCvv = card.cvv_encrypted
+        
+        // If it's plaintext (starts with digits, typical card number format), use it directly
+        if (/^\d{13,19}$/.test(storedNumber) && /^\d{3,4}$/.test(storedCvv)) {
+          // Legacy plaintext format - return the actual values
+          console.log('Using legacy plaintext card data for card:', card.id)
+          return new Response(
+            JSON.stringify({
+              card: {
+                id: card.id,
+                type: card.type,
+                card_number: storedNumber.replace(/(.{4})/g, '$1 ').trim(),
+                last_four: card.last_four,
+                expiry_date: card.expiry_date,
+                cvv: storedCvv,
+                cardholder_name: card.cardholder_name,
+                is_active: card.is_active,
+                is_frozen: card.is_frozen,
+                created_at: card.created_at
+              }
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+        
+        // If it's not plaintext and decryption failed, return masked version
         return new Response(
           JSON.stringify({
             card: {
