@@ -29,7 +29,7 @@ Deno.serve(async (req) => {
     }
 
     // Create client with user's auth token
-    const supabaseUser = createClient(supabaseUrl, Deno.env.get('SUPABASE_PUBLISHABLE_KEY')!, {
+    const supabaseUser = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
       global: { headers: { Authorization: authHeader } }
     })
 
@@ -51,8 +51,8 @@ Deno.serve(async (req) => {
     const url = new URL(req.url)
     const action = url.searchParams.get('action')
 
-    // GET /wallet?action=balance - Get wallet balance
-    if (req.method === 'GET' && action === 'balance') {
+    // GET /wallet or GET /wallet?action=balance - Get wallet balance
+    if (req.method === 'GET' && (!action || action === 'balance')) {
       // Get user's wallet
       const { data: wallet, error: walletError } = await supabase
         .from('wallets')
