@@ -9,18 +9,27 @@ export interface User {
 
 export interface Transaction {
   id: string;
-  type: 'send' | 'receive' | 'request' | 'deposit';
+  type: 'send' | 'receive' | 'deposit' | 'withdrawal';
   amount: number;
-  status: 'COMPLETED' | 'PENDING_CONFIRMATION' | 'BLOCKED' | 'FAILED';
+  status: 'completed' | 'pending' | 'blocked';
   description: string;
   recipient?: User;
   sender?: User;
   createdAt: Date;
+  isRisky?: boolean;
 }
 
 export interface WalletBalance {
   available: number;
   pending: number;
+  total: number;
+}
+
+export interface InsightData {
+  monthlySpend: number;
+  monthlyReceived: number;
+  fraudBlocked: number;
+  transactionCount: number;
 }
 
 export interface UserSettings {
@@ -33,6 +42,10 @@ export interface UserSettings {
     biometric: boolean;
     twoFactor: boolean;
   };
+  privacy: {
+    hideBalance: boolean;
+    privateMode: boolean;
+  };
 }
 
 export type Screen = 
@@ -41,14 +54,12 @@ export type Screen =
   | 'send'
   | 'send-amount'
   | 'send-confirm'
-  | 'send-result'
+  | 'send-success'
   | 'receive'
-  | 'request'
-  | 'request-amount'
   | 'history'
-  | 'transaction-detail'
   | 'insights'
   | 'settings'
   | 'profile'
   | 'security'
+  | 'notifications'
   | 'help';

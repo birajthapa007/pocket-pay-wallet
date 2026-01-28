@@ -3,72 +3,72 @@
 @tailwind utilities;
 
 /* Pocket Pay Design System
-   Cash App + Chime inspired
-   Calm, trustworthy, modern, minimal
+   Premium, calm, dark fintech theme
+   Inspired by Revolut, N26, Mercury
 */
 
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
 @layer base {
   :root {
-    /* Cash App inspired - clean dark with vibrant green accent */
-    --background: 220 20% 7%;
-    --foreground: 0 0% 98%;
+    /* Premium dark palette - calm and sophisticated */
+    --background: 225 25% 8%;
+    --foreground: 210 20% 95%;
 
-    --card: 220 18% 10%;
-    --card-foreground: 0 0% 98%;
+    --card: 225 20% 11%;
+    --card-foreground: 210 20% 95%;
 
-    --popover: 220 18% 12%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 225 20% 13%;
+    --popover-foreground: 210 20% 95%;
 
-    /* Primary - Cash App green */
-    --primary: 145 72% 52%;
-    --primary-foreground: 220 20% 7%;
-    --primary-soft: 145 50% 12%;
-    --primary-muted: 145 40% 25%;
+    /* Primary - Refined teal/cyan accent */
+    --primary: 175 70% 50%;
+    --primary-foreground: 225 25% 8%;
+    --primary-soft: 175 50% 15%;
+    --primary-glow: 175 70% 50%;
 
     /* Secondary - Elevated surface */
-    --secondary: 220 16% 13%;
-    --secondary-foreground: 0 0% 90%;
+    --secondary: 225 18% 14%;
+    --secondary-foreground: 210 20% 90%;
 
-    --muted: 220 14% 16%;
+    --muted: 225 15% 18%;
     --muted-foreground: 220 10% 55%;
 
-    --accent: 145 30% 15%;
-    --accent-foreground: 145 72% 60%;
+    --accent: 175 40% 20%;
+    --accent-foreground: 175 70% 70%;
 
-    /* Status - softer, friendlier */
-    --success: 145 60% 50%;
-    --success-foreground: 220 20% 7%;
-    --success-soft: 145 40% 12%;
+    /* Status colors - softer for dark theme */
+    --success: 160 65% 45%;
+    --success-foreground: 160 90% 95%;
+    --success-soft: 160 50% 12%;
 
-    --warning: 42 90% 55%;
-    --warning-foreground: 42 100% 10%;
-    --warning-soft: 42 50% 12%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 38 100% 95%;
+    --warning-soft: 38 60% 12%;
 
-    --destructive: 0 55% 55%;
+    --destructive: 0 70% 50%;
     --destructive-foreground: 0 0% 100%;
-    --destructive-soft: 0 40% 12%;
+    --destructive-soft: 0 50% 12%;
 
-    --info: 210 70% 55%;
-    --info-foreground: 0 0% 100%;
-    --info-soft: 210 50% 12%;
+    --info: 210 80% 55%;
+    --info-foreground: 210 100% 95%;
+    --info-soft: 210 60% 12%;
 
-    --border: 220 14% 16%;
-    --input: 220 16% 13%;
-    --ring: 145 72% 52%;
+    --border: 225 15% 18%;
+    --input: 225 15% 16%;
+    --ring: 175 70% 50%;
 
     --radius: 1rem;
 
     /* Sidebar */
-    --sidebar-background: 220 20% 7%;
-    --sidebar-foreground: 0 0% 98%;
-    --sidebar-primary: 145 72% 52%;
-    --sidebar-primary-foreground: 220 20% 7%;
-    --sidebar-accent: 220 16% 13%;
-    --sidebar-accent-foreground: 0 0% 90%;
-    --sidebar-border: 220 14% 16%;
-    --sidebar-ring: 145 72% 52%;
+    --sidebar-background: 225 25% 8%;
+    --sidebar-foreground: 210 20% 95%;
+    --sidebar-primary: 175 70% 50%;
+    --sidebar-primary-foreground: 225 25% 8%;
+    --sidebar-accent: 225 18% 14%;
+    --sidebar-accent-foreground: 210 20% 90%;
+    --sidebar-border: 225 15% 18%;
+    --sidebar-ring: 175 70% 50%;
   }
 }
 
@@ -79,7 +79,7 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'DM Sans', system-ui, sans-serif;
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
   }
 
   html {
@@ -89,113 +89,136 @@
 }
 
 @layer components {
-  /* Hero balance - Cash App style */
-  .balance-hero {
-    @apply text-center py-8;
-  }
-
-  .balance-amount {
-    @apply text-6xl font-bold tracking-tight;
+  /* Balance display */
+  .balance-display {
+    @apply text-5xl font-extrabold tracking-tight;
     font-variant-numeric: tabular-nums;
   }
 
   .balance-cents {
-    @apply text-4xl font-bold opacity-70;
+    @apply text-3xl font-bold opacity-70;
   }
 
-  /* Action circle buttons - Cash App style */
-  .action-circle {
-    @apply flex flex-col items-center gap-2;
+  /* Premium wallet card */
+  .wallet-card {
+    background: linear-gradient(135deg, hsl(225 20% 14%) 0%, hsl(225 25% 10%) 100%);
+    border: 1px solid hsl(225 15% 22%);
+    @apply rounded-3xl p-6 relative overflow-hidden;
   }
 
-  .action-circle-btn {
-    @apply w-16 h-16 rounded-full flex items-center justify-center transition-all duration-200;
-    @apply bg-secondary border border-border;
+  .wallet-card::before {
+    content: '';
+    @apply absolute inset-0 opacity-30;
+    background: radial-gradient(ellipse at 20% 0%, hsl(175 70% 50% / 0.15) 0%, transparent 50%);
   }
 
-  .action-circle-btn:hover {
+  .wallet-card::after {
+    content: '';
+    @apply absolute inset-0 opacity-20;
+    background: radial-gradient(ellipse at 80% 100%, hsl(175 70% 50% / 0.1) 0%, transparent 40%);
+  }
+
+  /* Action buttons */
+  .action-button {
+    @apply flex flex-col items-center justify-center gap-2 p-4 rounded-2xl transition-all duration-200;
+    @apply bg-secondary border border-border/50;
+  }
+
+  .action-button:hover {
     @apply bg-muted border-primary/30;
   }
 
-  .action-circle-btn:active {
-    transform: scale(0.95);
+  .action-button:active {
+    transform: scale(0.97);
   }
 
-  .action-circle-btn.primary {
-    @apply bg-primary border-transparent;
+  .action-button-icon {
+    @apply w-12 h-12 rounded-full flex items-center justify-center;
+    background: linear-gradient(135deg, hsl(175 70% 50%) 0%, hsl(175 60% 40%) 100%);
   }
 
-  .action-circle-label {
-    @apply text-sm font-medium text-muted-foreground;
-  }
-
-  /* Transaction item - cleaner */
+  /* Transaction item */
   .transaction-item {
-    @apply flex items-center gap-4 py-4 transition-colors;
+    @apply flex items-center gap-4 p-4 rounded-2xl transition-all duration-200;
+    @apply bg-secondary/50 border border-transparent;
+  }
+
+  .transaction-item:hover {
+    @apply bg-secondary border-border/50;
   }
 
   .transaction-item:active {
-    @apply bg-secondary/50 -mx-4 px-4 rounded-xl;
+    @apply bg-muted;
   }
 
-  /* Status pills */
-  .status-pill {
-    @apply text-xs font-medium px-2 py-0.5 rounded-full;
-  }
-
+  /* Status badges */
   .status-completed {
-    @apply bg-success-soft text-success;
+    @apply bg-success-soft;
+    color: hsl(160 65% 55%);
   }
 
   .status-pending {
-    @apply bg-warning-soft text-warning;
+    @apply bg-warning-soft;
+    color: hsl(38 92% 60%);
   }
 
   .status-blocked {
-    @apply bg-muted text-muted-foreground;
+    @apply bg-destructive-soft text-destructive;
   }
 
-  /* Input - clean minimal */
-  .input-clean {
-    @apply w-full px-0 py-4 bg-transparent border-0 border-b border-border;
-    @apply text-lg text-foreground transition-colors;
+  /* Security prompt */
+  .security-prompt {
+    @apply bg-warning-soft rounded-2xl p-5;
+    border: 1px solid hsl(38 92% 50% / 0.2);
   }
 
-  .input-clean::placeholder {
+  /* Insight card */
+  .insight-card {
+    @apply bg-card rounded-2xl p-5 border border-border/50;
+  }
+
+  /* Mobile input */
+  .mobile-input {
+    @apply w-full px-4 py-4 rounded-xl bg-secondary border border-border/50;
+    @apply text-lg text-foreground transition-all;
+  }
+
+  .mobile-input::placeholder {
     @apply text-muted-foreground;
   }
 
-  .input-clean:focus {
-    @apply outline-none border-primary;
+  .mobile-input:focus {
+    @apply ring-2 ring-primary/30 border-primary/50 outline-none;
   }
 
-  /* Amount input - giant centered */
-  .amount-giant {
-    @apply text-6xl font-bold text-center bg-transparent border-0 text-foreground w-full;
+  /* Amount input */
+  .amount-input {
+    @apply text-5xl font-bold text-center bg-transparent border-0 text-foreground;
     @apply outline-none;
     font-variant-numeric: tabular-nums;
   }
 
   /* Screen container */
   .screen-container {
-    @apply min-h-screen max-w-md mx-auto px-6 py-8;
+    @apply min-h-screen max-w-md mx-auto px-5 py-6;
   }
 
-  /* Bottom nav - floating pill */
+  /* Bottom navigation */
   .bottom-nav {
     @apply fixed bottom-0 left-0 right-0;
-    @apply px-6 pb-6 pt-4;
-    background: linear-gradient(to top, hsl(220 20% 7%) 60%, transparent);
+    background: linear-gradient(180deg, transparent 0%, hsl(225 25% 8%) 20%);
+    @apply px-4 pt-6 pb-3;
+    padding-bottom: max(env(safe-area-inset-bottom), 0.75rem);
   }
 
-  .bottom-nav-pill {
+  .bottom-nav-inner {
     @apply flex justify-around items-center;
-    @apply bg-card/95 backdrop-blur-lg border border-border rounded-2xl;
-    @apply py-2 px-2 max-w-sm mx-auto;
+    @apply bg-card/90 backdrop-blur-xl border border-border/50 rounded-2xl;
+    @apply px-2 py-2;
   }
 
   .nav-item {
-    @apply flex flex-col items-center gap-0.5 py-2 px-5 rounded-xl transition-all duration-200;
+    @apply flex flex-col items-center gap-1 py-2 px-5 rounded-xl transition-all duration-200;
     @apply text-muted-foreground;
   }
 
@@ -204,72 +227,103 @@
   }
 
   .nav-item.active {
-    @apply text-primary;
+    @apply text-primary bg-primary-soft;
   }
 
-  /* Keypad - minimal */
-  .keypad-btn {
-    @apply w-20 h-14 rounded-xl flex items-center justify-center;
-    @apply text-2xl font-medium transition-all duration-100;
+  /* Keypad button */
+  .keypad-button {
+    @apply w-16 h-16 rounded-2xl flex items-center justify-center;
+    @apply text-2xl font-semibold transition-all duration-150;
     @apply text-foreground;
   }
 
-  .keypad-btn:active {
-    @apply bg-secondary scale-95;
+  .keypad-button:hover {
+    @apply bg-secondary;
   }
 
-  /* Menu list */
-  .menu-list {
-    @apply divide-y divide-border;
-  }
-
-  .menu-item {
-    @apply flex items-center gap-4 py-4 transition-colors;
-  }
-
-  .menu-item:active {
-    @apply bg-secondary/30 -mx-2 px-2 rounded-lg;
-  }
-
-  /* Toggle */
-  .toggle-switch {
-    @apply relative w-12 h-7 rounded-full transition-colors duration-200;
+  .keypad-button:active {
+    transform: scale(0.92);
     @apply bg-muted;
   }
 
-  .toggle-switch.on {
+  /* Settings item */
+  .settings-item {
+    @apply flex items-center gap-4 p-4 rounded-2xl transition-all duration-200;
+    @apply bg-transparent;
+  }
+
+  .settings-item:hover {
+    @apply bg-secondary/50;
+  }
+
+  .settings-item:active {
+    @apply bg-secondary;
+  }
+
+  /* Menu section */
+  .menu-section {
+    @apply bg-card rounded-2xl border border-border/50 overflow-hidden;
+  }
+
+  .menu-section > *:not(:last-child) {
+    @apply border-b border-border/50;
+  }
+
+  /* Profile card */
+  .profile-card {
+    @apply bg-card rounded-3xl p-6 border border-border/50;
+    background: linear-gradient(135deg, hsl(225 20% 13%) 0%, hsl(225 25% 10%) 100%);
+  }
+
+  /* Toggle switch track */
+  .toggle-track {
+    @apply w-12 h-7 rounded-full transition-colors duration-200;
+    @apply bg-muted;
+  }
+
+  .toggle-track.active {
     @apply bg-primary;
   }
 
-  .toggle-knob {
-    @apply absolute top-1 left-1 w-5 h-5 rounded-full bg-foreground shadow-lg transition-transform duration-200;
+  .toggle-thumb {
+    @apply w-5 h-5 rounded-full bg-foreground shadow-lg transition-transform duration-200;
   }
 
-  .toggle-switch.on .toggle-knob {
+  .toggle-track.active .toggle-thumb {
     transform: translateX(20px);
-  }
-
-  /* Friendly alert */
-  .friendly-alert {
-    @apply bg-warning-soft/50 border border-warning/20 rounded-2xl p-4;
-  }
-
-  /* Card subtle */
-  .card-subtle {
-    @apply bg-card border border-border rounded-2xl p-5;
   }
 }
 
 @layer utilities {
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 1rem);
+  }
+
   .safe-bottom {
-    padding-bottom: max(env(safe-area-inset-bottom), 1.5rem);
+    padding-bottom: env(safe-area-inset-bottom, 1rem);
   }
 
-  .glow-green {
-    box-shadow: 0 0 50px -15px hsl(145 72% 52% / 0.4);
+  .page-enter {
+    @apply animate-fade-in;
   }
 
-  .text-balance {
-    text-wrap: balance;
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .glow-primary {
+    box-shadow: 0 0 40px -10px hsl(175 70% 50% / 0.4);
+  }
+
+  .text-gradient {
+    background: linear-gradient(135deg, hsl(175 70% 60%) 0%, hsl(175 70% 45%) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 }

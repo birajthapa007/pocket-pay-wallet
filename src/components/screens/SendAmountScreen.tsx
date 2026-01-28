@@ -2,85 +2,108 @@ import { useState } from 'react';
 import { ArrowLeft, Delete } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { User } from '@/types/wallet';
-import { formatCurrency } from '@/data/mockData';
+import { walletBalance } from '@/data/mockData';
 
 interface SendAmountScreenProps {
   recipient: User;
-  balance: number;
   onSetAmount: (amount: number) => void;
   onBack: () => void;
 }
 
-const SendAmountScreen = ({ recipient, balance, onSetAmount, onBack }: SendAmountScreenProps) => {
-  const [value, setValue] = useState('0');
+const SendAmountScreen = ({ recipient, onSetAmount, onBack }: SendAmountScreenProps) => {
+  const [amount, setAmount] = useState('0');
 
-  const handleKey = (key: string) => {
-    if (key === 'del') {
-      setValue((v) => (v.length > 1 ? v.slice(0, -1) : '0'));
+  const handleKeyPress = (key: string) => {
+    if (key === 'delete') {
+      setAmount((prev) => (prev.length > 1 ? prev.slice(0, -1) : '0'));
       return;
     }
-    if (key === '.' && value.includes('.')) return;
-    if (value === '0' && key !== '.') {
-      setValue(key);
+    if (key === '.' && amount.includes('.')) return;
+    if (amount === '0' && key !== '.') {
+      setAmount(key);
     } else {
-      if (value.includes('.') && value.split('.')[1]?.length >= 2) return;
-      setValue((v) => v + key);
+      if (amount.includes('.') && amount.split('.')[1].length >= 2) return;
+      setAmount((prev) => prev + key);
     }
   };
 
-  const numValue = parseFloat(value) || 0;
-  const isOverBalance = numValue > balance;
+  const handleContinue = () => {
+    const numAmount = parseFloat(amount);
+    if (numAmount > 0) {
+      onSetAmount(numAmount);
+    }
+  };
 
-  const getInitials = (name: string) => name.split(' ').map((n) => n[0]).join('');
+  const getInitials = (name: string) => {
+    return name.split(' ').map((n) => n[0]).join('').toUpperCase();
+  };
 
-  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del'];
+  const numAmount = parseFloat(amount) || 0;
+  const isOverBalance = numAmount > walletBalance.available;
+
+  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'delete'];
 
   return (
-    <div className="screen-container flex flex-col min-h-screen animate-fade-in">
+    <div className="screen-container flex flex-col animate-fade-in min-h-screen">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-4">
-        <button onClick={onBack} className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
+      <div className="flex items-center gap-4 mb-8">
+        <button
+          onClick={onBack}
+          className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center hover:bg-muted transition-colors"
+        >
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-semibold">
-          {getInitials(recipient.name)}
-        </div>
-        <div>
-          <p className="font-medium">{recipient.name}</p>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-primary-foreground font-semibold">
+            {getInitials(recipient.name)}
+          </div>
+          <div>
+            <p className="font-semibold text-foreground">{recipient.name}</p>
+            <p className="text-sm text-muted-foreground">@{recipient.username}</p>
+          </div>
         </div>
       </div>
 
-      {/* Amount */}
+      {/* Amount Display */}
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center">
-          <div className="flex items-baseline justify-center">
-            <span className="text-3xl font-bold text-muted-foreground mr-1">$</span>
-            <span className={`amount-giant ${isOverBalance ? 'text-destructive' : ''}`}>
-              {parseFloat(value).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+          <div className="flex items-baseline justify-center gap-1">
+            <span className="text-3xl font-bold text-muted-foreground">$</span>
+            <span className={`text-6xl font-bold tabular-nums ${isOverBalance ? 'text-destructive' : 'text-foreground'}`}>
+              {parseFloat(amount).toLocaleString('en-US', {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 2,
+              })}
             </span>
           </div>
           {isOverBalance && (
-            <p className="text-sm text-destructive mt-2 animate-fade-in">
-              Not enough balance
-            </p>
+            <p className="text-sm text-destructive mt-2 animate-fade-in">Exceeds available balance</p>
           )}
         </div>
       </div>
 
       {/* Keypad */}
-      <div className="grid grid-cols-3 gap-2 mb-6">
+      <div className="grid grid-cols-3 gap-1 mb-6 max-w-xs mx-auto w-full">
         {keys.map((key) => (
-          <button key={key} onClick={() => handleKey(key)} className="keypad-btn">
-            {key === 'del' ? <Delete className="w-6 h-6 mx-auto" /> : key}
+          <button
+            key={key}
+            onClick={() => handleKeyPress(key)}
+            className="keypad-button"
+          >
+            {key === 'delete' ? (
+              <Delete className="w-6 h-6" />
+            ) : (
+              key
+            )}
           </button>
         ))}
       </div>
 
+      {/* Continue Button */}
       <Button
-        variant="pay"
         size="full"
-        onClick={() => onSetAmount(numValue)}
-        disabled={numValue <= 0 || isOverBalance}
+        onClick={handleContinue}
+        disabled={numAmount <= 0 || isOverBalance}
       >
         Continue
       </Button>
