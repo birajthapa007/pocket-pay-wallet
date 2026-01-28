@@ -56,17 +56,17 @@ const SendConfirmScreen = React.forwardRef<HTMLDivElement, SendConfirmScreenProp
 
           {/* Amount Card */}
           <div className="bg-card border border-border/50 rounded-2xl p-5 mb-4">
-            <div className="text-center mb-4">
-              <p className="text-muted-foreground text-sm mb-1">Amount</p>
-              <p className="text-3xl font-bold text-foreground">{formatCurrency(amount)}</p>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Amount</p>
+              <p className="text-2xl font-bold text-foreground">{formatCurrency(amount)}</p>
             </div>
-            
-            {/* Payment Reason */}
-            <div className="border-t border-border/50 pt-4">
+            <div className="text-right">
               <p className="text-xs text-muted-foreground mb-1">For</p>
-              <p className="text-foreground font-medium">"{note}"</p>
+              <p className="text-sm font-medium text-foreground max-w-[140px] truncate">"{note}"</p>
             </div>
           </div>
+        </div>
 
           {/* Security Prompt for large amounts */}
           {showSecurityPrompt ? (

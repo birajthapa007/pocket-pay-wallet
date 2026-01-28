@@ -79,7 +79,27 @@
 
   html, body {
     overflow-x: hidden;
+    overflow-y: hidden;
     overscroll-behavior: none;
+    height: 100%;
+  }
+  
+  #root {
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  #root::-webkit-scrollbar {
+    display: none;
+  }
+  
+  /* Hide scrollbar for IE, Edge and Firefox */
+  #root {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 
   body {
