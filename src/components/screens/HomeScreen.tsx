@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowUpRight, ArrowDownLeft, HandCoins, ChevronRight, Eye, EyeOff, CreditCard, ShieldCheck, ScanLine } from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft, HandCoins, ChevronRight, Eye, EyeOff, CreditCard, ShieldCheck, ScanLine, Plus, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { WalletBalance, Transaction, User, Screen } from '@/types/wallet';
 import { formatCurrency } from '@/data/mockData';
@@ -36,6 +36,8 @@ interface HomeScreenProps {
   onReceive: () => void;
   onRequest: () => void;
   onScan: () => void;
+  onDeposit: () => void;
+  onWithdraw: () => void;
   onViewHistory: () => void;
   onOpenProfile: () => void;
   onNavigate: (screen: Screen) => void;
@@ -57,6 +59,8 @@ const HomeScreen = React.forwardRef<HTMLDivElement, HomeScreenProps>(({
   onReceive, 
   onRequest,
   onScan,
+  onDeposit,
+  onWithdraw,
   onViewHistory,
   onOpenProfile,
   onNavigate,
@@ -135,12 +139,18 @@ const HomeScreen = React.forwardRef<HTMLDivElement, HomeScreenProps>(({
               <span className="text-xs text-success font-medium">Protected</span>
             </div>
             <button 
-              onClick={() => onNavigate('cards')}
-              className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 transition-colors active:scale-[0.98]"
+              onClick={onDeposit}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-success/20 hover:bg-success/30 transition-colors active:scale-[0.98]"
             >
-              <CreditCard className="w-4 h-4 text-primary" />
-              <span className="text-sm text-muted-foreground">View Cards</span>
-              <ChevronRight className="w-4 h-4 text-muted-foreground ml-auto" />
+              <Plus className="w-4 h-4 text-success" />
+              <span className="text-sm text-success font-medium">Add</span>
+            </button>
+            <button 
+              onClick={onWithdraw}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-warning/20 hover:bg-warning/30 transition-colors active:scale-[0.98]"
+            >
+              <Minus className="w-4 h-4 text-warning" />
+              <span className="text-sm text-warning font-medium">Cash Out</span>
             </button>
           </div>
         </div>
