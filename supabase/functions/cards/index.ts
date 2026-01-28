@@ -1,11 +1,13 @@
 // =========================================
 // POCKET PAY - CARD OPERATIONS (SIMULATED)
 // List, freeze/unfreeze virtual/physical cards
+// Card data is encrypted at rest using AES-256-GCM
 // =========================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders, handleCorsPreflightRequest } from '../_shared/cors.ts'
 import { isValidUUID, validationError } from '../_shared/validation.ts'
+import { encryptData, decryptData } from '../_shared/encryption.ts'
 
 Deno.serve(async (req) => {
   const requestOrigin = req.headers.get('Origin')
@@ -76,7 +78,7 @@ Deno.serve(async (req) => {
         )
       }
 
-      // Mask sensitive data for response
+      // Mask sensitive data for response - only return non-sensitive info
       const maskedCards = cards?.map(card => ({
         id: card.id,
         type: card.type,
@@ -116,16 +118,49 @@ Deno.serve(async (req) => {
         )
       }
 
-      // Return full details (in production, log this access)
+      // Decrypt sensitive card data before returning
+      let decryptedCardNumber: string
+      let decryptedCvv: string
+      
+      try {
+        decryptedCardNumber = await decryptData(card.card_number_encrypted)
+        decryptedCvv = await decryptData(card.cvv_encrypted)
+      } catch (decryptError) {
+        console.error('Decryption error:', decryptError)
+        // If decryption fails, data may be in legacy plaintext format
+        // Return masked version for security
+        return new Response(
+          JSON.stringify({
+            card: {
+              id: card.id,
+              type: card.type,
+              card_number: `****-****-****-${card.last_four}`,
+              last_four: card.last_four,
+              expiry_date: card.expiry_date,
+              cvv: '***',
+              cardholder_name: card.cardholder_name,
+              is_active: card.is_active,
+              is_frozen: card.is_frozen,
+              created_at: card.created_at,
+              _notice: 'Card data requires migration to encrypted format'
+            }
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Return decrypted details (log this access for audit)
+      console.log(`Card details accessed: card_id=${card.id}, user_id=${userId}, timestamp=${new Date().toISOString()}`)
+      
       return new Response(
         JSON.stringify({
           card: {
             id: card.id,
             type: card.type,
-            card_number: card.card_number_encrypted, // In production, decrypt
+            card_number: decryptedCardNumber,
             last_four: card.last_four,
             expiry_date: card.expiry_date,
-            cvv: card.cvv_encrypted, // In production, decrypt
+            cvv: decryptedCvv,
             cardholder_name: card.cardholder_name,
             is_active: card.is_active,
             is_frozen: card.is_frozen,
@@ -219,6 +254,21 @@ Deno.serve(async (req) => {
       const expiryDate = new Date(Date.now() + 3 * 365 * 24 * 60 * 60 * 1000)
       const expiryString = `${String(expiryDate.getMonth() + 1).padStart(2, '0')}/${String(expiryDate.getFullYear()).slice(-2)}`
 
+      // Encrypt sensitive card data before storage
+      let encryptedCardNumber: string
+      let encryptedCvv: string
+      
+      try {
+        encryptedCardNumber = await encryptData(cardNumber)
+        encryptedCvv = await encryptData(cvv)
+      } catch (encryptError) {
+        console.error('Encryption error:', encryptError)
+        return new Response(
+          JSON.stringify({ error: 'Failed to secure card data' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
       // Get cardholder name from profile
       const { data: profile } = await supabase
         .from('profiles')
@@ -232,9 +282,9 @@ Deno.serve(async (req) => {
           wallet_id: wallet.id,
           type: 'virtual',
           last_four: lastFour,
-          card_number_encrypted: cardNumber,
+          card_number_encrypted: encryptedCardNumber,
           expiry_date: expiryString,
-          cvv_encrypted: cvv,
+          cvv_encrypted: encryptedCvv,
           cardholder_name: profile?.name?.toUpperCase() || 'CARDHOLDER',
           is_active: true,
           is_frozen: false
