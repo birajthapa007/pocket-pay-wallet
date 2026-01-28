@@ -302,13 +302,13 @@ serve(async (req: Request): Promise<Response> => {
         }
       }
 
-      // Generate a magic link token for the user to sign in
+      // Generate a magic link and get the hashed_token for session creation
       const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
         type: "magiclink",
         email: email.toLowerCase(),
       });
 
-      if (linkError || !linkData) {
+      if (linkError || !linkData?.properties?.hashed_token) {
         console.error("Link generation error:", linkError);
         return new Response(
           JSON.stringify({ error: "Failed to create login session" }),
@@ -316,19 +316,16 @@ serve(async (req: Request): Promise<Response> => {
         );
       }
 
-      // Extract token from the action_link (it's called "token" not "token_hash")
-      const actionLink = linkData.properties?.action_link || "";
-      const urlObj = new URL(actionLink);
-      const token = urlObj.searchParams.get("token");
+      // Get the hashed_token which can be used with verifyOtp
+      const hashedToken = linkData.properties.hashed_token;
       
-      console.log("Token extracted:", token ? "found" : "not found");
-      console.log("Generated token for:", email.toLowerCase());
+      console.log("Generated hashed_token for:", email.toLowerCase());
 
       return new Response(
         JSON.stringify({ 
           success: true,
           verified: true,
-          token: token,
+          token_hash: hashedToken,
           type: "magiclink",
           email: email.toLowerCase(),
           message: authAction === "signup" ? "Account created successfully" : "Login successful",
