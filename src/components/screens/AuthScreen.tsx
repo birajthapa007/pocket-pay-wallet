@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Shield, Loader2, Mail, Phone, ArrowLeft, KeyRound, Sparkles, UserPlus, Zap, CreditCard, TrendingUp, Send, Fingerprint } from 'lucide-react';
+import { Shield, Loader2, Mail, Phone, ArrowLeft, KeyRound, UserPlus, Zap, CreditCard, TrendingUp, Send, Fingerprint } from 'lucide-react';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { authApi } from '@/services/api';
 
@@ -276,87 +276,97 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
       className="flex-1 flex flex-col"
     >
       {mode === 'signup' ? (
-        // SIGNUP - Exciting, welcoming design
+        // SIGNUP - Clean, premium design
         <div className="flex-1 flex flex-col">
+          {/* Hero Section */}
           <motion.div 
             variants={itemVariants}
             className="text-center mb-8"
           >
-            <div className="relative inline-block mb-6">
+            {/* Animated gradient ring */}
+            <div className="relative w-28 h-28 mx-auto mb-6">
               <motion.div
-                animate={{ 
-                  scale: [1, 1.05, 1],
-                  rotate: [0, 2, -2, 0]
+                animate={{ rotate: 360 }}
+                transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+                className="absolute inset-0 rounded-full"
+                style={{
+                  background: 'conic-gradient(from 0deg, hsl(175 70% 50%), hsl(175 50% 30%), hsl(175 70% 50%))',
+                  padding: '2px',
                 }}
-                transition={{ 
-                  duration: 4,
-                  repeat: Infinity,
-                  repeatType: "reverse"
-                }}
-                className="w-24 h-24 rounded-[28px] bg-gradient-to-br from-primary via-primary/90 to-accent flex items-center justify-center mx-auto shadow-2xl shadow-primary/40 relative overflow-hidden"
               >
-                {/* Inner glow effect */}
-                <div className="absolute inset-0 bg-gradient-to-t from-transparent via-white/10 to-white/20" />
-                <Sparkles className="w-12 h-12 text-primary-foreground relative z-10" />
+                <div className="w-full h-full rounded-full bg-background" />
               </motion.div>
+              
+              {/* Center icon */}
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
-                transition={{ delay: 0.3, type: "spring" }}
-                className="absolute -bottom-2 -right-2 w-10 h-10 rounded-full bg-gradient-to-br from-accent to-accent/80 flex items-center justify-center shadow-lg border-2 border-background"
+                transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+                className="absolute inset-2 rounded-full bg-gradient-to-br from-card to-secondary flex items-center justify-center"
               >
-                <UserPlus className="w-5 h-5 text-accent-foreground" />
+                <motion.div
+                  animate={{ y: [0, -3, 0] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                >
+                  <UserPlus className="w-10 h-10 text-primary" />
+                </motion.div>
               </motion.div>
             </div>
-            <h2 className="text-3xl font-bold mb-3 bg-gradient-to-r from-foreground via-foreground to-primary bg-clip-text">Join Pocket Pay</h2>
-            <p className="text-muted-foreground text-lg">
-              Start your journey to smarter money
-            </p>
+
+            <motion.h2 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="text-3xl font-bold mb-2"
+            >
+              Create Account
+            </motion.h2>
+            <motion.p 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="text-muted-foreground"
+            >
+              Join thousands managing money smarter
+            </motion.p>
           </motion.div>
 
+          {/* Method selection */}
           <motion.div variants={itemVariants} className="space-y-3">
             <Button
               type="button"
-              variant="outline"
-              className="w-full h-[72px] text-base font-medium rounded-2xl border-2 border-primary/20 hover:border-primary hover:bg-primary/5 flex items-center justify-start gap-4 px-5 group transition-all duration-300"
+              className="w-full h-14 text-base font-semibold rounded-2xl bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 shadow-lg shadow-primary/20 flex items-center justify-center gap-3 transition-all duration-300"
               onClick={() => handleMethodSelect('email')}
             >
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-lg shadow-primary/20 group-hover:shadow-primary/40 transition-all">
-                <Mail className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <div className="text-left">
-                <div className="font-semibold text-lg">Continue with Email</div>
-                <div className="text-sm text-muted-foreground">We'll send a verification code</div>
-              </div>
+              <Mail className="w-5 h-5" />
+              <span>Continue with Email</span>
             </Button>
             
             <Button
               type="button"
               variant="outline"
-              className="w-full h-[72px] text-base font-medium rounded-2xl border-2 border-accent/30 hover:border-accent hover:bg-accent/5 flex items-center justify-start gap-4 px-5 group transition-all duration-300"
+              className="w-full h-14 text-base font-medium rounded-2xl border-2 border-border hover:bg-muted/50 flex items-center justify-center gap-3 transition-all duration-200"
               onClick={() => handleMethodSelect('phone')}
             >
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-accent to-accent/70 flex items-center justify-center shadow-lg shadow-accent/20 group-hover:shadow-accent/40 transition-all">
-                <Phone className="w-5 h-5 text-accent-foreground" />
-              </div>
-              <div className="text-left">
-                <div className="font-semibold text-lg">Continue with Phone</div>
-                <div className="text-sm text-muted-foreground">Quick SMS verification</div>
-              </div>
+              <Phone className="w-5 h-5 text-muted-foreground" />
+              <span>Continue with Phone</span>
             </Button>
           </motion.div>
 
+          {/* Trust indicators */}
           <motion.div 
             variants={itemVariants}
-            className="mt-8 p-5 rounded-2xl bg-gradient-to-r from-primary/10 via-accent/5 to-primary/10 border border-primary/20"
+            className="mt-auto pt-8"
           >
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-                <Shield className="w-6 h-6 text-primary" />
+            <div className="flex items-center justify-center gap-6 text-xs text-muted-foreground">
+              <div className="flex items-center gap-1.5">
+                <Shield className="w-4 h-4 text-primary" />
+                <span>256-bit encryption</span>
               </div>
-              <div>
-                <p className="font-semibold">Bank-level security</p>
-                <p className="text-sm text-muted-foreground">Your data is protected with 256-bit encryption</p>
+              <div className="w-1 h-1 rounded-full bg-muted-foreground/50" />
+              <div className="flex items-center gap-1.5">
+                <Zap className="w-4 h-4 text-primary" />
+                <span>Instant setup</span>
               </div>
             </div>
           </motion.div>
