@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Screen, User, Transaction, UserSettings } from '@/types/wallet';
 import { contacts, walletBalance, transactions as mockTransactions, currentUser } from '@/data/mockData';
+import { supabase } from '@/integrations/supabase/client';
+import AuthScreen from '@/components/screens/AuthScreen';
 import OnboardingScreen from '@/components/screens/OnboardingScreen';
 import HomeScreen from '@/components/screens/HomeScreen';
 import SendScreen from '@/components/screens/SendScreen';
@@ -25,8 +27,9 @@ import ScanScreen from '@/components/screens/ScanScreen';
 import BottomNav from '@/components/navigation/BottomNav';
 
 const Index = () => {
-  const [currentScreen, setCurrentScreen] = useState<Screen>('onboarding');
+  const [currentScreen, setCurrentScreen] = useState<Screen>('auth');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [selectedRecipient, setSelectedRecipient] = useState<User | null>(null);
   const [selectedContact, setSelectedContact] = useState<User | null>(null);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
@@ -42,6 +45,51 @@ const Index = () => {
     privacy: { hideBalance: false, privateMode: false },
   });
   const [previousScreen, setPreviousScreen] = useState<Screen>('home');
+
+  // Check auth state on mount
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        setIsLoggedIn(true);
+        // Update user info from session
+        setUser({
+          id: session.user.id,
+          name: session.user.user_metadata?.name || 'User',
+          username: session.user.user_metadata?.username || 'user',
+          email: session.user.email,
+        });
+        if (currentScreen === 'auth') {
+          setCurrentScreen('home');
+        }
+      } else {
+        setIsLoggedIn(false);
+        setCurrentScreen('auth');
+      }
+      setIsCheckingAuth(false);
+    });
+
+    // Initial session check
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setIsLoggedIn(true);
+        setUser({
+          id: session.user.id,
+          name: session.user.user_metadata?.name || 'User',
+          username: session.user.user_metadata?.username || 'user',
+          email: session.user.email,
+        });
+        setCurrentScreen('home');
+      }
+      setIsCheckingAuth(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleAuthSuccess = () => {
+    setIsLoggedIn(true);
+    setCurrentScreen('home');
+  };
 
   const handleLogin = () => {
     setIsLoggedIn(true);
@@ -127,15 +175,26 @@ const Index = () => {
   };
 
   const flowScreens = [
-    'send', 'send-amount', 'send-confirm', 'send-success', 
+    'auth', 'send', 'send-amount', 'send-confirm', 'send-success', 
     'receive', 'request', 'request-amount', 'request-success',
     'profile', 'security', 'notifications', 'help', 'cards', 
     'contact-profile', 'transaction-detail', 'scan'
   ];
   const showNav = isLoggedIn && !flowScreens.includes(currentScreen);
 
+  // Show loading while checking auth
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-pulse text-primary text-lg">Loading...</div>
+      </div>
+    );
+  }
+
   const renderScreen = () => {
     switch (currentScreen) {
+      case 'auth':
+        return <AuthScreen onSuccess={handleAuthSuccess} />;
       case 'onboarding':
         return <OnboardingScreen onComplete={handleLogin} />;
       case 'home':
@@ -231,9 +290,10 @@ const Index = () => {
           <SettingsScreen
             user={user}
             onNavigate={handleNavigate}
-            onLogout={() => {
+            onLogout={async () => {
+              await supabase.auth.signOut();
               setIsLoggedIn(false);
-              setCurrentScreen('onboarding');
+              setCurrentScreen('auth');
             }}
           />
         );

@@ -79,6 +79,7 @@ export interface ContactFinancials {
 }
 
 export type Screen = 
+  | 'auth'
   | 'onboarding'
   | 'home'
   | 'send'
