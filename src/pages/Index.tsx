@@ -161,8 +161,7 @@ const Index = () => {
           id: result.transaction.id,
           type: 'send',
           amount: sendAmount,
-          status: result.transaction.status === 'completed' ? 'completed' : 
-                  result.transaction.status === 'blocked' ? 'blocked' : 'pending',
+          status: result.transaction.status as Transaction['status'],
           description: sendNote,
           recipient: selectedRecipient,
           createdAt: new Date(),

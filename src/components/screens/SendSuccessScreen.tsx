@@ -24,7 +24,7 @@ const SendSuccessScreen = React.forwardRef<HTMLDivElement, SendSuccessScreenProp
 
     const status = transaction?.status || 'completed';
     const isRisky = transaction?.isRisky || false;
-    const isPending = status === 'pending';
+    const isPending = status === 'pending_confirmation';
 
     const handleConfirm = async () => {
       if (transaction?.id) {
@@ -52,7 +52,7 @@ const SendSuccessScreen = React.forwardRef<HTMLDivElement, SendSuccessScreenProp
               <div className="absolute inset-0 rounded-full bg-success/30 animate-ping" />
             </>
           )}
-          {status === 'pending' && (
+          {isPending && (
             <div className="w-24 h-24 rounded-full bg-warning flex items-center justify-center shadow-lg">
               <AlertTriangle className="w-12 h-12 text-warning-foreground" strokeWidth={2} />
             </div>
@@ -66,12 +66,12 @@ const SendSuccessScreen = React.forwardRef<HTMLDivElement, SendSuccessScreenProp
 
         {/* Message */}
         <h1 className="text-3xl font-bold text-foreground mb-2">
-          {status === 'completed' ? 'Sent!' : status === 'pending' ? 'Review Required' : 'Blocked'}
+          {status === 'completed' ? 'Sent!' : isPending ? 'Review Required' : 'Blocked'}
         </h1>
         <p className="text-muted-foreground text-center mb-4 px-6">
           {status === 'completed' 
             ? 'Your payment was successful' 
-            : status === 'pending'
+            : isPending
             ? 'This transfer needs your confirmation'
             : 'This transfer was blocked for your protection'}
         </p>
@@ -116,19 +116,19 @@ const SendSuccessScreen = React.forwardRef<HTMLDivElement, SendSuccessScreenProp
         {/* Security Microcopy */}
         <div className={`flex items-center justify-center gap-2 mb-8 px-4 py-2 rounded-full ${
           status === 'completed' ? 'bg-success-soft' : 
-          status === 'pending' ? 'bg-warning-soft' : 'bg-destructive-soft'
+          isPending ? 'bg-warning-soft' : 'bg-destructive-soft'
         }`}>
           <ShieldCheck className={`w-4 h-4 ${
             status === 'completed' ? 'text-success' : 
-            status === 'pending' ? 'text-warning' : 'text-destructive'
+            isPending ? 'text-warning' : 'text-destructive'
           }`} />
           <span className={`text-xs font-medium ${
             status === 'completed' ? 'text-success' : 
-            status === 'pending' ? 'text-warning' : 'text-destructive'
+            isPending ? 'text-warning' : 'text-destructive'
           }`}>
             {status === 'completed' 
               ? 'Secure transaction complete' 
-              : status === 'pending'
+              : isPending
               ? 'Awaiting your confirmation'
               : 'Transfer blocked for safety'}
           </span>

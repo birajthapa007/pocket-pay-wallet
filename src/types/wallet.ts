@@ -11,7 +11,7 @@ export interface Transaction {
   id: string;
   type: 'send' | 'receive' | 'deposit' | 'withdrawal' | 'request';
   amount: number;
-  status: 'completed' | 'pending' | 'blocked';
+  status: 'created' | 'pending_confirmation' | 'completed' | 'blocked' | 'failed';
   description: string;
   recipient?: User;
   sender?: User;
