@@ -427,7 +427,7 @@ export const authApi = {
           'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
         body: JSON.stringify({
-          email: params.contact,
+          email: params.contact.toLowerCase(),
           code: params.otp,
           action: 'signup',
         }),
@@ -439,34 +439,30 @@ export const authApi = {
         return { user: null, error: data.error || 'Verification failed' };
       }
 
-      // If we got a redirect URL, use it to complete the sign in
-      if (data.redirect_url) {
-        // Extract token from URL and verify
-        const redirectUrl = new URL(data.redirect_url);
-        const tokenHash = redirectUrl.searchParams.get('token_hash') || redirectUrl.hash.split('access_token=')[1]?.split('&')[0];
+      // If we got a token_hash directly, use it
+      if (data.token_hash) {
+        const { data: sessionData, error: sessionError } = await supabase.auth.verifyOtp({
+          token_hash: data.token_hash,
+          type: 'magiclink',
+        });
         
-        if (tokenHash) {
-          // Try to exchange the token
-          const { data: sessionData, error: sessionError } = await supabase.auth.verifyOtp({
-            token_hash: tokenHash,
-            type: 'magiclink',
+        if (sessionError) {
+          console.error('Session verification error:', sessionError);
+          // Try email OTP as fallback
+          const { data: fallbackData, error: fallbackError } = await supabase.auth.verifyOtp({
+            email: params.contact.toLowerCase(),
+            token: params.otp,
+            type: 'email',
           });
           
-          if (!sessionError && sessionData.user) {
-            // Update profile
-            await supabase
-              .from('profiles')
-              .update({
-                name: params.name,
-                username: params.username,
-                email: params.type === 'email' ? params.contact : null,
-                phone: params.type === 'phone' ? params.contact : null,
-              })
-              .eq('id', sessionData.user.id);
-
+          if (fallbackError) {
+            return { user: null, error: 'Failed to complete login. Please try again.' };
+          }
+          
+          if (fallbackData.user) {
             return {
               user: {
-                id: sessionData.user.id,
+                id: fallbackData.user.id,
                 name: params.name,
                 username: params.username,
                 email: params.type === 'email' ? params.contact : undefined,
@@ -476,11 +472,35 @@ export const authApi = {
             };
           }
         }
+        
+        if (sessionData?.user) {
+          // Update profile with user details
+          await supabase
+            .from('profiles')
+            .update({
+              name: params.name,
+              username: params.username,
+              email: params.type === 'email' ? params.contact : null,
+              phone: params.type === 'phone' ? params.contact : null,
+            })
+            .eq('id', sessionData.user.id);
+
+          return {
+            user: {
+              id: sessionData.user.id,
+              name: params.name,
+              username: params.username,
+              email: params.type === 'email' ? params.contact : undefined,
+              phone: params.type === 'phone' ? params.contact : undefined,
+            },
+            error: null,
+          };
+        }
       }
 
       // Fallback: try Supabase's built-in OTP verification
       const verifyParams = params.type === 'email' 
-        ? { email: params.contact, token: params.otp, type: 'email' as const }
+        ? { email: params.contact.toLowerCase(), token: params.otp, type: 'email' as const }
         : { phone: params.contact, token: params.otp, type: 'sms' as const };
 
       const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp(verifyParams);
