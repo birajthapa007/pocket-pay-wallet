@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Screen, User, Transaction, WalletBalance } from '@/types/wallet';
 import { RecipientWithWallet } from '@/types/recipient';
 import { useAuth } from '@/hooks/useAuth';
-import { useWalletSummary, useTransactions, useContacts, useSendMoney, useCreateRequest, useLookupUser } from '@/hooks/useWallet';
+import { useWalletSummary, useTransactions, useContacts, useSendMoney, useCreateRequest, useLookupUser, useMoneyRequests, useAcceptRequest, useDeclineRequest } from '@/hooks/useWallet';
 import { useSettings } from '@/hooks/useSettings';
 import { formatCurrency } from '@/data/mockData';
 import AuthScreen from '@/components/screens/AuthScreen';
@@ -47,8 +47,11 @@ const Index = () => {
   const { data: walletData, isLoading: isWalletLoading, refetch: refetchWallet } = useWalletSummary();
   const { data: allTransactions = [], refetch: refetchTransactions } = useTransactions();
   const { data: contacts = [] } = useContacts();
+  const { data: moneyRequests, refetch: refetchRequests } = useMoneyRequests();
   const sendMoney = useSendMoney();
   const createRequest = useCreateRequest();
+  const acceptRequest = useAcceptRequest();
+  const declineRequest = useDeclineRequest();
   const lookupUser = useLookupUser();
 
   // Navigate based on auth state
@@ -253,6 +256,8 @@ const Index = () => {
             transactions={transactions.slice(0, 4)}
             user={user || { id: '', name: 'User', username: 'user' }}
             hideBalance={settings.privacy.hideBalance}
+            incomingRequests={moneyRequests?.incoming || []}
+            outgoingRequests={moneyRequests?.outgoing || []}
             onSend={() => setCurrentScreen('send')}
             onReceive={() => setCurrentScreen('receive')}
             onRequest={() => setCurrentScreen('request')}
@@ -261,7 +266,24 @@ const Index = () => {
             onOpenProfile={() => setCurrentScreen('settings')}
             onNavigate={handleNavigate}
             onTransactionClick={(t) => handleTransactionClick(t, 'home')}
+            onAcceptRequest={(id) => {
+              acceptRequest.mutate(id, {
+                onSuccess: () => {
+                  refetchWallet();
+                  refetchTransactions();
+                  refetchRequests();
+                }
+              });
+            }}
+            onDeclineRequest={(id) => {
+              declineRequest.mutate(id, {
+                onSuccess: () => {
+                  refetchRequests();
+                }
+              });
+            }}
             isLoading={isWalletLoading}
+            isRequestLoading={acceptRequest.isPending || declineRequest.isPending}
           />
         );
       case 'send':
