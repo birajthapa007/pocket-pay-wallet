@@ -2,13 +2,13 @@ import { useState } from 'react';
 import { ArrowLeft, Search } from 'lucide-react';
 import { User } from '@/types/wallet';
 
-interface SendScreenProps {
+interface RequestScreenProps {
   contacts: User[];
   onSelectRecipient: (user: User) => void;
   onBack: () => void;
 }
 
-const SendScreen = ({ contacts, onSelectRecipient, onBack }: SendScreenProps) => {
+const RequestScreen = ({ contacts, onSelectRecipient, onBack }: RequestScreenProps) => {
   const [query, setQuery] = useState('');
 
   const filtered = contacts.filter((c) =>
@@ -25,7 +25,7 @@ const SendScreen = ({ contacts, onSelectRecipient, onBack }: SendScreenProps) =>
         <button onClick={onBack} className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <h1 className="text-2xl font-bold">Send</h1>
+        <h1 className="text-2xl font-bold">Request</h1>
       </div>
 
       {/* Search */}
@@ -33,7 +33,7 @@ const SendScreen = ({ contacts, onSelectRecipient, onBack }: SendScreenProps) =>
         <Search className="absolute left-0 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
         <input
           type="text"
-          placeholder="Name or @username"
+          placeholder="Who do you want to request from?"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="input-clean pl-8"
@@ -50,7 +50,7 @@ const SendScreen = ({ contacts, onSelectRecipient, onBack }: SendScreenProps) =>
             className="menu-item w-full animate-fade-in"
             style={{ animationDelay: `${i * 0.03}s` }}
           >
-            <div className="w-11 h-11 rounded-full bg-primary/20 flex items-center justify-center text-primary font-semibold">
+            <div className="w-11 h-11 rounded-full bg-secondary flex items-center justify-center font-semibold">
               {getInitials(contact.name)}
             </div>
             <div className="flex-1 text-left">
@@ -70,4 +70,4 @@ const SendScreen = ({ contacts, onSelectRecipient, onBack }: SendScreenProps) =>
   );
 };
 
-export default SendScreen;
+export default RequestScreen;
