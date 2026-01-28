@@ -2,17 +2,17 @@ import { useState } from 'react';
 import { ArrowLeft, Delete } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { User } from '@/types/wallet';
-import { formatCurrency } from '@/data/mockData';
+import { toast } from '@/hooks/use-toast';
 
-interface SendAmountScreenProps {
+interface RequestAmountScreenProps {
   recipient: User;
-  balance: number;
-  onSetAmount: (amount: number) => void;
+  onRequest: (amount: number) => void;
   onBack: () => void;
 }
 
-const SendAmountScreen = ({ recipient, balance, onSetAmount, onBack }: SendAmountScreenProps) => {
+const RequestAmountScreen = ({ recipient, onRequest, onBack }: RequestAmountScreenProps) => {
   const [value, setValue] = useState('0');
+  const [note, setNote] = useState('');
 
   const handleKey = (key: string) => {
     if (key === 'del') {
@@ -29,7 +29,14 @@ const SendAmountScreen = ({ recipient, balance, onSetAmount, onBack }: SendAmoun
   };
 
   const numValue = parseFloat(value) || 0;
-  const isOverBalance = numValue > balance;
+
+  const handleRequest = () => {
+    onRequest(numValue);
+    toast({
+      title: "Request sent!",
+      description: `Requested $${numValue.toFixed(2)} from ${recipient.name}`,
+    });
+  };
 
   const getInitials = (name: string) => name.split(' ').map((n) => n[0]).join('');
 
@@ -42,11 +49,11 @@ const SendAmountScreen = ({ recipient, balance, onSetAmount, onBack }: SendAmoun
         <button onClick={onBack} className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-semibold">
+        <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center font-semibold">
           {getInitials(recipient.name)}
         </div>
         <div>
-          <p className="font-medium">{recipient.name}</p>
+          <p className="font-medium">Request from {recipient.name}</p>
         </div>
       </div>
 
@@ -55,15 +62,10 @@ const SendAmountScreen = ({ recipient, balance, onSetAmount, onBack }: SendAmoun
         <div className="text-center">
           <div className="flex items-baseline justify-center">
             <span className="text-3xl font-bold text-muted-foreground mr-1">$</span>
-            <span className={`amount-giant ${isOverBalance ? 'text-destructive' : ''}`}>
+            <span className="amount-giant">
               {parseFloat(value).toLocaleString('en-US', { maximumFractionDigits: 2 })}
             </span>
           </div>
-          {isOverBalance && (
-            <p className="text-sm text-destructive mt-2 animate-fade-in">
-              Not enough balance
-            </p>
-          )}
         </div>
       </div>
 
@@ -77,15 +79,15 @@ const SendAmountScreen = ({ recipient, balance, onSetAmount, onBack }: SendAmoun
       </div>
 
       <Button
-        variant="pay"
+        variant="secondary"
         size="full"
-        onClick={() => onSetAmount(numValue)}
-        disabled={numValue <= 0 || isOverBalance}
+        onClick={handleRequest}
+        disabled={numValue <= 0}
       >
-        Continue
+        Request
       </Button>
     </div>
   );
 };
 
-export default SendAmountScreen;
+export default RequestAmountScreen;
