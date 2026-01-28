@@ -360,7 +360,144 @@ export const cardsApi = {
 // ==========================================
 
 export const authApi = {
-  // Sign up new user
+  // Send OTP to email
+  async sendOtpEmail(email: string): Promise<{ error: string | null }> {
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: true,
+      },
+    });
+    
+    if (error) {
+      return { error: error.message };
+    }
+    return { error: null };
+  },
+
+  // Send OTP to phone
+  async sendOtpPhone(phone: string): Promise<{ error: string | null }> {
+    const { error } = await supabase.auth.signInWithOtp({
+      phone,
+      options: {
+        shouldCreateUser: true,
+      },
+    });
+    
+    if (error) {
+      return { error: error.message };
+    }
+    return { error: null };
+  },
+
+  // Verify OTP for signup
+  async verifyOtpSignup(params: {
+    contact: string;
+    type: 'email' | 'phone';
+    otp: string;
+    name: string;
+    username: string;
+  }): Promise<{ user: UserProfile | null; error: string | null }> {
+    const verifyParams = params.type === 'email' 
+      ? { email: params.contact, token: params.otp, type: 'email' as const }
+      : { phone: params.contact, token: params.otp, type: 'sms' as const };
+
+    const { data, error } = await supabase.auth.verifyOtp(verifyParams);
+
+    if (error) {
+      return { user: null, error: error.message };
+    }
+
+    // Update user metadata with name and username
+    if (data.user) {
+      await supabase.auth.updateUser({
+        data: {
+          name: params.name,
+          username: params.username,
+        },
+      });
+
+      // Update profile in database
+      await supabase
+        .from('profiles')
+        .update({
+          name: params.name,
+          username: params.username,
+          email: params.type === 'email' ? params.contact : null,
+          phone: params.type === 'phone' ? params.contact : null,
+        })
+        .eq('id', data.user.id);
+    }
+
+    return {
+      user: data.user ? {
+        id: data.user.id,
+        name: params.name,
+        username: params.username,
+        email: params.type === 'email' ? params.contact : undefined,
+        phone: params.type === 'phone' ? params.contact : undefined,
+      } : null,
+      error: null,
+    };
+  },
+
+  // Verify OTP for login
+  async verifyOtpLogin(params: {
+    contact: string;
+    type: 'email' | 'phone';
+    otp: string;
+  }): Promise<{ user: UserProfile | null; error: string | null }> {
+    const verifyParams = params.type === 'email' 
+      ? { email: params.contact, token: params.otp, type: 'email' as const }
+      : { phone: params.contact, token: params.otp, type: 'sms' as const };
+
+    const { data, error } = await supabase.auth.verifyOtp(verifyParams);
+
+    if (error) {
+      return { user: null, error: error.message };
+    }
+
+    return {
+      user: data.user ? {
+        id: data.user.id,
+        name: data.user.user_metadata?.name || 'User',
+        username: data.user.user_metadata?.username || '',
+        email: data.user.email || undefined,
+        phone: data.user.phone || undefined,
+      } : null,
+      error: null,
+    };
+  },
+
+  // Sign in with password (fallback for login)
+  async signInWithPassword(params: {
+    contact: string;
+    type: 'email' | 'phone';
+    password: string;
+  }): Promise<{ user: UserProfile | null; error: string | null }> {
+    const signInParams = params.type === 'email'
+      ? { email: params.contact, password: params.password }
+      : { phone: params.contact, password: params.password };
+
+    const { data, error } = await supabase.auth.signInWithPassword(signInParams);
+
+    if (error) {
+      return { user: null, error: error.message };
+    }
+
+    return {
+      user: data.user ? {
+        id: data.user.id,
+        name: data.user.user_metadata?.name || 'User',
+        username: data.user.user_metadata?.username || '',
+        email: data.user.email || undefined,
+        phone: data.user.phone || undefined,
+      } : null,
+      error: null,
+    };
+  },
+
+  // Legacy sign up with password (kept for compatibility)
   async signUp(params: {
     email: string;
     password: string;
@@ -393,7 +530,7 @@ export const authApi = {
     };
   },
 
-  // Sign in
+  // Legacy sign in (kept for compatibility)
   async signIn(params: {
     email: string;
     password: string;

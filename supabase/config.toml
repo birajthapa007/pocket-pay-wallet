@@ -1,5 +1,14 @@
 project_id = "onlhhefpjkcjkscsnoqk"
 
+[auth]
+# Enable phone auth
+enable_signup = true
+
+[auth.sms]
+# Enable OTP via SMS
+enable_signup = true
+enable_confirmations = false
+
 [functions.wallet]
 verify_jwt = false
 
