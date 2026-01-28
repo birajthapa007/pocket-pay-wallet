@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Copy, QrCode, Share2, Check } from 'lucide-react';
+import { ArrowLeft, Copy, Share2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { User } from '@/types/wallet';
 import { toast } from '@/hooks/use-toast';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface ReceiveScreenProps {
   user: User;
@@ -12,6 +13,14 @@ interface ReceiveScreenProps {
 const ReceiveScreen = React.forwardRef<HTMLDivElement, ReceiveScreenProps>(
   ({ user, onBack }, ref) => {
     const [copied, setCopied] = useState(false);
+
+    // Create a unique payment link/QR data for this user
+    const qrData = JSON.stringify({
+      type: 'pocketpay',
+      version: 1,
+      username: user.username,
+      userId: user.id,
+    });
 
     const handleCopyUsername = () => {
       navigator.clipboard.writeText(`@${user.username}`);
@@ -51,9 +60,15 @@ const ReceiveScreen = React.forwardRef<HTMLDivElement, ReceiveScreenProps>(
         {/* QR Code Section */}
         <div className="flex-1 flex flex-col items-center justify-center">
           <div className="bg-card border border-border/50 rounded-3xl p-6 sm:p-8 mb-8 shadow-lg">
-            <div className="w-40 h-40 sm:w-48 sm:h-48 bg-foreground rounded-2xl flex items-center justify-center relative overflow-hidden">
-              <QrCode className="w-28 h-28 sm:w-36 sm:h-36 text-background" />
-              <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-primary/10" />
+            <div className="w-48 h-48 sm:w-56 sm:h-56 bg-white rounded-2xl flex items-center justify-center p-4 relative overflow-hidden">
+              <QRCodeSVG
+                value={qrData}
+                size={180}
+                level="H"
+                includeMargin={false}
+                bgColor="#ffffff"
+                fgColor="#000000"
+              />
             </div>
           </div>
 
