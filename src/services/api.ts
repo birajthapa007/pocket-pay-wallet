@@ -439,10 +439,12 @@ export const authApi = {
         return { user: null, error: data.error || 'Verification failed' };
       }
 
-      // If we got a token_hash directly, use it
-      if (data.token_hash) {
+      // If we got a token directly, use it to verify
+      if (data.token) {
+        // Use the token with email verification
         const { data: sessionData, error: sessionError } = await supabase.auth.verifyOtp({
-          token_hash: data.token_hash,
+          email: params.contact.toLowerCase(),
+          token: data.token,
           type: 'magiclink',
         });
         
