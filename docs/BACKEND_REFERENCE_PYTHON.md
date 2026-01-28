@@ -1,8 +1,8 @@
 # Pocket Pay - Python/FastAPI Backend Reference
 
-This document contains the complete Python backend architecture for future migration from Lovable Cloud to a self-hosted FastAPI backend.
+This document contains the complete Python backend architecture for future migration to a self-hosted FastAPI backend.
 
-> **Current Status**: The app runs on Lovable Cloud (Supabase). This reference code is for **future migration** when you need full control over the backend.
+> **Current Status**: The app currently uses Supabase Edge Functions. This reference code is for **future migration** when you need full control over the backend.
 
 ## 📁 Folder Structure
 
@@ -38,7 +38,8 @@ pocket-pay-backend/
 │   │   ├── transfers.py
 │   │   ├── requests.py
 │   │   ├── transactions.py
-│   │   └── cards.py
+│   │   ├── cards.py
+│   │   └── banking.py
 │   │
 │   ├── services/                  # Business logic
 │   │   ├── __init__.py
@@ -46,7 +47,8 @@ pocket-pay-backend/
 │   │   ├── wallet_service.py
 │   │   ├── transfer_service.py
 │   │   ├── risk_service.py
-│   │   └── ledger_service.py
+│   │   ├── ledger_service.py
+│   │   └── banking_service.py
 │   │
 │   └── utils/
 │       ├── __init__.py
@@ -108,6 +110,9 @@ class Settings(BaseSettings):
     LARGE_TRANSFER_THRESHOLD: float = 500.00
     RAPID_TRANSFER_COUNT: int = 5
     RAPID_TRANSFER_WINDOW_MINUTES: int = 60
+    
+    # Banking Settings
+    INSTANT_WITHDRAWAL_FEE_PERCENT: float = 1.5
     
     # Demo Mode
     WELCOME_BONUS: float = 100.00
@@ -391,6 +396,26 @@ class LedgerService:
         self.db.add(entry)
         await self.db.flush()
         return entry
+    
+    async def create_withdrawal_entry(
+        self,
+        wallet_id: UUID,
+        amount: Decimal,
+        description: str,
+        transaction_id: UUID = None
+    ) -> LedgerEntry:
+        """
+        Create a withdrawal entry (money going out to external source).
+        """
+        entry = LedgerEntry(
+            wallet_id=wallet_id,
+            amount=-amount,  # Negative for withdrawal
+            reference_transaction_id=transaction_id,
+            description=description
+        )
+        self.db.add(entry)
+        await self.db.flush()
+        return entry
 ```
 
 ### app/services/risk_service.py
@@ -493,324 +518,203 @@ class RiskService:
         return result.scalar() >= self.settings.RAPID_TRANSFER_COUNT
 ```
 
-### app/services/transfer_service.py
+### app/services/banking_service.py
 
 ```python
 """
-Transfer Service - Orchestrates the send money flow.
-Uses Payment Intent pattern (like Stripe).
+Banking Service - Handles deposits and withdrawals.
+Simulates bank account connections for demo purposes.
 """
 from decimal import Decimal
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.transaction import Transaction, TransactionType, TransactionStatus
-from app.models.wallet import Wallet
 from app.services.ledger_service import LedgerService
-from app.services.risk_service import RiskService
-from app.utils.exceptions import InsufficientFundsError, WalletNotFoundError
+from app.config import get_settings
 
 
-class TransferResult:
-    """Result of a transfer operation"""
-    def __init__(
-        self,
-        transaction: Transaction,
-        status: str,
-        message: str,
-        risk_reason: str = None
-    ):
-        self.transaction = transaction
-        self.status = status
-        self.message = message
-        self.risk_reason = risk_reason
-
-
-class TransferService:
+class BankingService:
     """
-    Handles all P2P transfer operations.
-    Follows intent-based payment pattern.
+    Handles external money movement (deposits/withdrawals).
+    In production, this would integrate with Stripe/Plaid.
     """
     
     def __init__(self, db: AsyncSession):
         self.db = db
         self.ledger = LedgerService(db)
-        self.risk = RiskService(db)
+        self.settings = get_settings()
     
-    async def create_transfer(
+    async def deposit(
         self,
-        sender_wallet_id: UUID,
-        recipient_wallet_id: UUID,
+        wallet_id: UUID,
         amount: Decimal,
-        description: str
-    ) -> TransferResult:
+        bank_name: str
+    ) -> Transaction:
         """
-        Create a new transfer (payment intent).
-        May complete immediately or require confirmation.
+        Process a deposit from external bank.
         """
-        # Validate wallets exist
-        sender = await self._get_wallet(sender_wallet_id)
-        recipient = await self._get_wallet(recipient_wallet_id)
-        
-        if not sender:
-            raise WalletNotFoundError("Sender wallet not found")
-        if not recipient:
-            raise WalletNotFoundError("Recipient wallet not found")
-        if sender.id == recipient.id:
-            raise ValueError("Cannot send money to yourself")
-        
-        # Check balance
-        balance = await self.ledger.get_balance(sender_wallet_id)
-        if balance < amount:
-            raise InsufficientFundsError(f"Available: ${balance:.2f}")
-        
-        # Assess risk
-        risk = await self.risk.assess_transfer(
-            sender_wallet_id, recipient_wallet_id, amount
-        )
-        
         # Create transaction record
-        initial_status = (
-            TransactionStatus.PENDING_CONFIRMATION if risk.is_risky 
-            else TransactionStatus.CREATED
-        )
-        
         transaction = Transaction(
-            type=TransactionType.SEND,
-            sender_wallet_id=sender_wallet_id,
-            recipient_wallet_id=recipient_wallet_id,
+            type=TransactionType.DEPOSIT,
+            recipient_wallet_id=wallet_id,
             amount=amount,
-            description=description,
-            status=initial_status,
-            is_risky=risk.is_risky,
-            risk_reason=risk.reason
+            description=f"Deposit from {bank_name}",
+            status=TransactionStatus.COMPLETED
         )
         self.db.add(transaction)
         await self.db.flush()
         
-        # If not risky, complete immediately
-        if not risk.is_risky:
-            await self._complete_transfer(transaction)
-            return TransferResult(
-                transaction=transaction,
-                status="completed",
-                message="Transfer completed successfully"
-            )
-        
-        # Return pending for confirmation
-        return TransferResult(
-            transaction=transaction,
-            status="pending_confirmation",
-            message="Transfer requires confirmation",
-            risk_reason=risk.reason
-        )
-    
-    async def confirm_transfer(self, transaction_id: UUID, user_wallet_id: UUID) -> TransferResult:
-        """
-        Confirm a risky transfer that's pending.
-        Only the sender can confirm their own transfers.
-        """
-        transaction = await self._get_pending_transaction(transaction_id, user_wallet_id)
-        
-        if not transaction:
-            raise ValueError("Transaction not found or already processed")
-        
-        # Re-check balance
-        balance = await self.ledger.get_balance(transaction.sender_wallet_id)
-        if balance < transaction.amount:
-            transaction.status = TransactionStatus.FAILED
-            await self.db.commit()
-            raise InsufficientFundsError(f"Available: ${balance:.2f}")
-        
-        # Complete the transfer
-        await self._complete_transfer(transaction)
-        
-        return TransferResult(
-            transaction=transaction,
-            status="completed",
-            message="Transfer confirmed and completed"
-        )
-    
-    async def _complete_transfer(self, transaction: Transaction):
-        """
-        Complete a transfer by creating ledger entries.
-        This is where money actually moves.
-        """
-        await self.ledger.create_transfer_entries(
-            transaction_id=transaction.id,
-            sender_wallet_id=transaction.sender_wallet_id,
-            recipient_wallet_id=transaction.recipient_wallet_id,
-            amount=Decimal(str(transaction.amount)),
-            description=transaction.description
+        # Create ledger entry
+        await self.ledger.create_deposit_entry(
+            wallet_id=wallet_id,
+            amount=amount,
+            description=f"Deposit from {bank_name}",
+            transaction_id=transaction.id
         )
         
-        transaction.status = TransactionStatus.COMPLETED
         await self.db.commit()
+        return transaction
     
-    async def _get_wallet(self, wallet_id: UUID) -> Wallet:
-        result = await self.db.execute(
-            select(Wallet).where(Wallet.id == wallet_id)
+    async def withdraw(
+        self,
+        wallet_id: UUID,
+        amount: Decimal,
+        bank_name: str,
+        speed: str = "standard"
+    ) -> tuple[Transaction, Decimal]:
+        """
+        Process a withdrawal to external bank.
+        Returns transaction and fee amount.
+        """
+        # Calculate fee for instant withdrawals
+        fee = Decimal("0")
+        if speed == "instant":
+            fee = amount * Decimal(str(self.settings.INSTANT_WITHDRAWAL_FEE_PERCENT / 100))
+        
+        total_amount = amount + fee
+        
+        # Check balance
+        balance = await self.ledger.get_balance(wallet_id)
+        if balance < total_amount:
+            raise ValueError("Insufficient balance for withdrawal")
+        
+        # Create transaction record
+        transaction = Transaction(
+            type=TransactionType.WITHDRAWAL,
+            sender_wallet_id=wallet_id,
+            amount=total_amount,
+            description=f"Withdrawal to {bank_name} ({speed})",
+            status=TransactionStatus.COMPLETED
         )
-        return result.scalar_one_or_none()
-    
-    async def _get_pending_transaction(
-        self, 
-        transaction_id: UUID, 
-        sender_wallet_id: UUID
-    ) -> Transaction:
-        result = await self.db.execute(
-            select(Transaction)
-            .where(Transaction.id == transaction_id)
-            .where(Transaction.sender_wallet_id == sender_wallet_id)
-            .where(Transaction.status == TransactionStatus.PENDING_CONFIRMATION)
+        self.db.add(transaction)
+        await self.db.flush()
+        
+        # Create ledger entry
+        await self.ledger.create_withdrawal_entry(
+            wallet_id=wallet_id,
+            amount=total_amount,
+            description=f"Withdrawal to {bank_name} ({speed})",
+            transaction_id=transaction.id
         )
-        return result.scalar_one_or_none()
+        
+        await self.db.commit()
+        return transaction, fee
 ```
 
 ---
 
 ## 🌐 API Routes
 
-### app/api/transfers.py
+### app/api/banking.py
 
 ```python
 """
-Transfer API endpoints.
+Banking API - Deposit and withdrawal endpoints.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from uuid import UUID
+from decimal import Decimal
 
 from app.database import get_db
-from app.schemas.transaction import TransferCreate, TransferConfirm, TransferResponse
-from app.services.transfer_service import TransferService
+from app.services.banking_service import BankingService
+from app.schemas.banking import DepositRequest, WithdrawRequest, BankingResponse
 from app.utils.security import get_current_user
-from app.utils.exceptions import InsufficientFundsError, WalletNotFoundError
 
-router = APIRouter(prefix="/transfers", tags=["transfers"])
+router = APIRouter(prefix="/banking", tags=["banking"])
 
 
-@router.post("/send", response_model=TransferResponse)
-async def create_transfer(
-    request: TransferCreate,
+@router.post("/deposit", response_model=BankingResponse)
+async def deposit(
+    request: DepositRequest,
     db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    """
-    Create a new transfer (payment intent).
-    
-    Flow:
-    1. Validates amount and recipient
-    2. Checks sender's balance
-    3. Runs risk assessment
-    4. Either completes immediately or returns pending_confirmation
-    """
-    service = TransferService(db)
+    """Process a deposit from external bank."""
+    service = BankingService(db)
     
     try:
-        result = await service.create_transfer(
-            sender_wallet_id=current_user.wallet.id,
-            recipient_wallet_id=request.recipient_wallet_id,
-            amount=request.amount,
-            description=request.description
+        transaction = await service.deposit(
+            wallet_id=current_user.wallet.id,
+            amount=Decimal(str(request.amount)),
+            bank_name=request.bank_name
         )
         
-        return TransferResponse(
-            transaction=result.transaction,
-            status=result.status,
-            message=result.message,
-            risk_reason=result.risk_reason
+        return BankingResponse(
+            success=True,
+            transaction_id=str(transaction.id),
+            message=f"Successfully deposited ${request.amount:.2f}"
         )
-        
-    except InsufficientFundsError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except WalletNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except ValueError as e:
+    except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/confirm", response_model=TransferResponse)
-async def confirm_transfer(
-    request: TransferConfirm,
+@router.post("/withdraw", response_model=BankingResponse)
+async def withdraw(
+    request: WithdrawRequest,
     db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    """
-    Confirm a risky transfer that requires user verification.
-    """
-    service = TransferService(db)
+    """Process a withdrawal to external bank."""
+    service = BankingService(db)
     
     try:
-        result = await service.confirm_transfer(
-            transaction_id=request.transaction_id,
-            user_wallet_id=current_user.wallet.id
+        transaction, fee = await service.withdraw(
+            wallet_id=current_user.wallet.id,
+            amount=Decimal(str(request.amount)),
+            bank_name=request.bank_name,
+            speed=request.speed
         )
         
-        return TransferResponse(
-            transaction=result.transaction,
-            status=result.status,
-            message=result.message
-        )
+        message = f"Successfully withdrew ${request.amount:.2f}"
+        if fee > 0:
+            message += f" (fee: ${fee:.2f})"
         
-    except InsufficientFundsError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        return BankingResponse(
+            success=True,
+            transaction_id=str(transaction.id),
+            message=message,
+            fee=float(fee)
+        )
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
 ```
 
 ---
 
-## 🚀 Main Application
+## 🚀 Migration Steps
 
-### app/main.py
+When migrating from the current Edge Functions setup:
 
-```python
-"""
-FastAPI application entry point.
-"""
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+1. **Set up PostgreSQL database** with the same schema
+2. **Run Alembic migrations** to create tables
+3. **Configure environment variables** for database, JWT, etc.
+4. **Deploy FastAPI** to your preferred hosting (Railway, Render, AWS, etc.)
+5. **Update frontend API client** to point to new backend URL
+6. **Migrate user data** from Supabase Auth to custom auth
+7. **Set up monitoring** and logging for production
 
-from app.api import auth, wallet, transfers, requests, transactions, cards
-from app.config import get_settings
-
-settings = get_settings()
-
-app = FastAPI(
-    title="Pocket Pay API",
-    description="Consumer-first digital wallet backend",
-    version="1.0.0"
-)
-
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Configure for production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Include routers
-app.include_router(auth.router)
-app.include_router(wallet.router)
-app.include_router(transfers.router)
-app.include_router(requests.router)
-app.include_router(transactions.router)
-app.include_router(cards.router)
-
-
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy", "service": "pocket-pay-api"}
-```
-
----
-
-## 🐳 Docker Setup
-
-### docker-compose.yml
+### Docker Compose
 
 ```yaml
 version: '3.8'
@@ -821,23 +725,19 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://pocket:pay@db:5432/pocketpay
-      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=postgresql+asyncpg://postgres:password@db:5432/pocketpay
+      - SECRET_KEY=your-production-secret-key
     depends_on:
       - db
-    volumes:
-      - .:/app
 
   db:
     image: postgres:15
     environment:
-      - POSTGRES_USER=pocket
-      - POSTGRES_PASSWORD=pay
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
       - POSTGRES_DB=pocketpay
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
 
 volumes:
   postgres_data:
@@ -845,56 +745,9 @@ volumes:
 
 ---
 
-## 📋 Setup & Run
+## 📝 Notes
 
-```bash
-# 1. Clone and setup
-git clone <repo>
-cd pocket-pay-backend
-
-# 2. Create virtual environment
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# 3. Install dependencies
-pip install -r requirements.txt
-
-# 4. Setup environment
-cp .env.example .env
-# Edit .env with your values
-
-# 5. Run migrations
-alembic upgrade head
-
-# 6. Start server
-uvicorn app.main:app --reload --port 8000
-
-# Or with Docker
-docker-compose up -d
-```
-
----
-
-## 🧪 Demo Scenarios
-
-The backend supports these demo scenarios:
-
-1. **Small Transfer** → Instant `COMPLETED`
-2. **Large Transfer (>$500)** → `PENDING_CONFIRMATION`
-3. **First-time Recipient** → `PENDING_CONFIRMATION`
-4. **Rapid Transfers** → `PENDING_CONFIRMATION`
-5. **Request → Accept** → Creates completed transfer
-
----
-
-## 🔗 Migration from Lovable Cloud
-
-When migrating:
-
-1. Export data from Supabase tables
-2. Import into PostgreSQL
-3. Update frontend API URLs
-4. Deploy FastAPI to your infrastructure
-5. Update CORS settings for your domain
-
-The schema and API contracts are designed to be compatible!
+- This reference maintains the same API contract as the Edge Functions
+- The ledger-based architecture ensures data integrity
+- Risk rules are configurable via environment or database
+- Banking operations are simulated but designed for real Stripe/Plaid integration

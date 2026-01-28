@@ -92,6 +92,13 @@ card_type: 'virtual' | 'physical'
 | `unfreeze` | POST | Unfreeze a card |
 | `create` | POST | Create new virtual card |
 
+### Banking API (`/functions/v1/banking`)
+
+| Action | Method | Description |
+|--------|--------|-------------|
+| `deposit` | POST | Add money from bank account |
+| `withdraw` | POST | Cash out to bank account |
+
 ---
 
 ## 🛡️ Risk Rules
@@ -154,6 +161,26 @@ All tables have RLS enabled with policies ensuring:
 6. Request status → 'accepted', linked to transaction
 ```
 
+### Deposit Flow
+
+```
+1. User selects bank → POST /banking?action=deposit
+2. Backend validates amount
+3. Create ledger entry (credit wallet)
+4. Create transaction record (type: deposit)
+5. Return success
+```
+
+### Withdrawal Flow
+
+```
+1. User selects bank + speed → POST /banking?action=withdraw
+2. Backend checks balance (including fee for instant)
+3. Create ledger entry (debit wallet)
+4. Create transaction record (type: withdrawal)
+5. Return success with fee info
+```
+
 ---
 
 ## 📱 Frontend Integration
@@ -163,7 +190,7 @@ All tables have RLS enabled with policies ensuring:
 Use `src/services/api.ts` for all backend calls:
 
 ```typescript
-import { walletApi, transfersApi, requestsApi, transactionsApi, cardsApi, authApi } from '@/services/api';
+import { walletApi, transfersApi, requestsApi, transactionsApi, cardsApi, authApi, bankingApi } from '@/services/api';
 
 // Get balance
 const balance = await walletApi.getBalance();
@@ -180,6 +207,12 @@ if (result.status === 'pending_confirmation') {
   // Show confirmation dialog
   await transfersApi.confirm(result.transaction.id);
 }
+
+// Deposit money
+await bankingApi.deposit({ amount: 100, bank_id: 'chase' });
+
+// Withdraw money
+await bankingApi.withdraw({ amount: 50, bank_id: 'chase', speed: 'instant' });
 ```
 
 ---
@@ -193,6 +226,8 @@ Test these flows to verify the backend:
 3. **First-Time Recipient** → Requires confirmation
 4. **Request → Accept** → Creates completed transfer
 5. **Freeze/Unfreeze Card** → Card state updates
+6. **Deposit $100** → Balance increases
+7. **Withdraw $50 (instant)** → Balance decreases with 1.5% fee
 
 ---
 
@@ -206,26 +241,40 @@ supabase/
     ├── transfers/index.ts         # Send money, confirm
     ├── requests/index.ts          # Money requests
     ├── transactions/index.ts      # History, insights
-    └── cards/index.ts             # Card management
+    ├── cards/index.ts             # Card management
+    └── banking/index.ts           # Deposit/withdraw
 
 src/
 ├── services/api.ts                # Frontend API client
+├── hooks/
+│   ├── useWallet.ts               # Wallet state management
+│   ├── useBanking.ts              # Banking operations
+│   ├── useAuth.ts                 # Authentication
+│   └── useSettings.ts             # App settings
 ├── integrations/supabase/
 │   ├── client.ts                  # Auto-generated client
 │   └── types.ts                   # Auto-generated types
 └── components/screens/
-    └── AuthScreen.tsx             # Login/signup screen
+    ├── AuthScreen.tsx             # Login/signup
+    ├── HomeScreen.tsx             # Main dashboard
+    ├── SendScreen.tsx             # Send money flow
+    ├── RequestScreen.tsx          # Request money flow
+    ├── DepositScreen.tsx          # Add money
+    ├── WithdrawScreen.tsx         # Cash out
+    └── ...
 
 docs/
+├── BACKEND_DOCUMENTATION.md       # This file
 └── BACKEND_REFERENCE_PYTHON.md    # Python/FastAPI migration guide
 ```
 
 ---
 
-## 🚀 Next Steps
+## 🚀 Production Considerations
 
-1. **Test the auth flow**: Sign up and verify wallet/card creation
-2. **Test send money**: Try small and large transfers
-3. **Test requests**: Create and accept money requests
-4. **Connect frontend**: Replace mock data with real API calls
-5. **Add Stripe later**: Backend is designed for easy Stripe integration
+1. **Real Payment Integration**: Replace simulated deposits with Stripe/Plaid
+2. **KYC/AML**: Add identity verification for larger transfers
+3. **Push Notifications**: Notify users of incoming transfers/requests
+4. **Biometric Auth**: Add Face ID/Touch ID for transaction confirmation
+5. **Rate Limiting**: Protect APIs from abuse
+6. **Audit Logging**: Track all financial operations for compliance
