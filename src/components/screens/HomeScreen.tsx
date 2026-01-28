@@ -4,13 +4,34 @@ import { Button } from '@/components/ui/button';
 import { WalletBalance, Transaction, User, Screen } from '@/types/wallet';
 import { formatCurrency } from '@/data/mockData';
 import TransactionItem from '@/components/wallet/TransactionItem';
+import PendingRequests from '@/components/wallet/PendingRequests';
 import { useState } from 'react';
+
+interface MoneyRequest {
+  id: string;
+  amount: number;
+  note?: string;
+  status: string;
+  created_at: string;
+  requester?: {
+    id: string;
+    name: string;
+    username: string;
+  };
+  requested_from?: {
+    id: string;
+    name: string;
+    username: string;
+  };
+}
 
 interface HomeScreenProps {
   balance: WalletBalance;
   transactions: Transaction[];
   user: User;
   hideBalance: boolean;
+  incomingRequests?: MoneyRequest[];
+  outgoingRequests?: MoneyRequest[];
   onSend: () => void;
   onReceive: () => void;
   onRequest: () => void;
@@ -19,7 +40,10 @@ interface HomeScreenProps {
   onOpenProfile: () => void;
   onNavigate: (screen: Screen) => void;
   onTransactionClick: (transaction: Transaction) => void;
+  onAcceptRequest?: (requestId: string) => void;
+  onDeclineRequest?: (requestId: string) => void;
   isLoading?: boolean;
+  isRequestLoading?: boolean;
 }
 
 const HomeScreen = React.forwardRef<HTMLDivElement, HomeScreenProps>(({ 
@@ -27,6 +51,8 @@ const HomeScreen = React.forwardRef<HTMLDivElement, HomeScreenProps>(({
   transactions, 
   user, 
   hideBalance: initialHideBalance,
+  incomingRequests = [],
+  outgoingRequests = [],
   onSend, 
   onReceive, 
   onRequest,
@@ -34,7 +60,10 @@ const HomeScreen = React.forwardRef<HTMLDivElement, HomeScreenProps>(({
   onViewHistory,
   onOpenProfile,
   onNavigate,
-  onTransactionClick
+  onTransactionClick,
+  onAcceptRequest,
+  onDeclineRequest,
+  isRequestLoading
 }, ref) => {
   const [hideBalance, setHideBalance] = useState(initialHideBalance);
   const dollars = Math.floor(balance.available);
@@ -155,6 +184,15 @@ const HomeScreen = React.forwardRef<HTMLDivElement, HomeScreenProps>(({
           <span className="font-semibold text-sm">Request</span>
         </Button>
       </div>
+
+      {/* Pending Money Requests */}
+      <PendingRequests
+        incoming={incomingRequests}
+        outgoing={outgoingRequests}
+        onAccept={onAcceptRequest || (() => {})}
+        onDecline={onDeclineRequest || (() => {})}
+        isLoading={isRequestLoading}
+      />
 
       {/* Recent Transactions */}
       <div>

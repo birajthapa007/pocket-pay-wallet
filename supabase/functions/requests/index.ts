@@ -391,10 +391,54 @@ Deno.serve(async (req) => {
         .eq('requester_wallet_id', wallet.id)
         .order('created_at', { ascending: false })
 
+      // Enrich incoming requests with requester profile
+      const enrichedIncoming = await Promise.all(
+        (incoming || []).map(async (req) => {
+          const { data: requesterWallet } = await supabase
+            .from('wallets')
+            .select('user_id')
+            .eq('id', req.requester_wallet_id)
+            .single()
+          
+          if (requesterWallet) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('id, name, username, avatar_url')
+              .eq('id', requesterWallet.user_id)
+              .single()
+            
+            return { ...req, requester: profile }
+          }
+          return req
+        })
+      )
+
+      // Enrich outgoing requests with requestedFrom profile
+      const enrichedOutgoing = await Promise.all(
+        (outgoing || []).map(async (req) => {
+          const { data: targetWallet } = await supabase
+            .from('wallets')
+            .select('user_id')
+            .eq('id', req.requested_from_wallet_id)
+            .single()
+          
+          if (targetWallet) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('id, name, username, avatar_url')
+              .eq('id', targetWallet.user_id)
+              .single()
+            
+            return { ...req, requested_from: profile }
+          }
+          return req
+        })
+      )
+
       return new Response(
         JSON.stringify({
-          incoming: incoming || [],
-          outgoing: outgoing || []
+          incoming: enrichedIncoming,
+          outgoing: enrichedOutgoing
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
