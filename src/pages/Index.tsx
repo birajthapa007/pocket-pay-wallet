@@ -30,6 +30,8 @@ import TransactionDetailScreen from '@/components/screens/TransactionDetailScree
 import ScanScreen from '@/components/screens/ScanScreen';
 import DepositScreen from '@/components/screens/DepositScreen';
 import WithdrawScreen from '@/components/screens/WithdrawScreen';
+import TermsScreen from '@/components/screens/TermsScreen';
+import PrivacyScreen from '@/components/screens/PrivacyScreen';
 import BottomNav from '@/components/navigation/BottomNav';
 
 const Index = () => {
@@ -235,7 +237,8 @@ const Index = () => {
     'auth', 'send', 'send-amount', 'send-confirm', 'send-success', 
     'receive', 'request', 'request-amount', 'request-success',
     'profile', 'security', 'notifications', 'help', 'cards', 
-    'contact-profile', 'transaction-detail', 'scan', 'deposit', 'withdraw'
+    'contact-profile', 'transaction-detail', 'scan', 'deposit', 'withdraw',
+    'terms', 'privacy'
   ];
   const showNav = isLoggedIn && !flowScreens.includes(currentScreen);
 
@@ -366,6 +369,8 @@ const Index = () => {
           <HistoryScreen 
             transactions={transactions} 
             onTransactionClick={(t) => handleTransactionClick(t, 'history')}
+            incomingRequests={moneyRequests?.incoming || []}
+            outgoingRequests={moneyRequests?.outgoing || []}
           />
         );
       case 'insights':
@@ -517,6 +522,10 @@ const Index = () => {
             isLoading={withdraw.isPending}
           />
         );
+      case 'terms':
+        return <TermsScreen onBack={() => setCurrentScreen('settings')} />;
+      case 'privacy':
+        return <PrivacyScreen onBack={() => setCurrentScreen('settings')} />;
       default:
         return null;
     }

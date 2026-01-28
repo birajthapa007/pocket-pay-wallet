@@ -35,8 +35,8 @@ const SettingsScreen = React.forwardRef<HTMLDivElement, SettingsScreenProps>(
     ];
 
     const legalItems = [
-      { label: 'Terms of Service', icon: FileText },
-      { label: 'Privacy Policy', icon: FileText },
+      { label: 'Terms of Service', icon: FileText, screen: 'terms' as Screen },
+      { label: 'Privacy Policy', icon: FileText, screen: 'privacy' as Screen },
     ];
 
     return (
@@ -86,10 +86,14 @@ const SettingsScreen = React.forwardRef<HTMLDivElement, SettingsScreenProps>(
         {/* Legal */}
         <div className="menu-section mb-6">
           {legalItems.map((item, i) => (
-            <button key={i} className="settings-item w-full active:scale-[0.99]">
+            <button 
+              key={i} 
+              onClick={() => onNavigate(item.screen)}
+              className="settings-item w-full active:scale-[0.99]"
+            >
               <item.icon className="w-5 h-5 text-muted-foreground flex-shrink-0" />
               <span className="flex-1 text-left text-foreground">{item.label}</span>
-              <ExternalLink className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+              <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
             </button>
           ))}
         </div>
