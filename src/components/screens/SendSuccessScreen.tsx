@@ -1,3 +1,4 @@
+import React from 'react';
 import { Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { User } from '@/types/wallet';
@@ -9,49 +10,55 @@ interface SendSuccessScreenProps {
   onDone: () => void;
 }
 
-const SendSuccessScreen = ({ recipient, amount, onDone }: SendSuccessScreenProps) => {
-  const getInitials = (name: string) => {
-    return name.split(' ').map((n) => n[0]).join('').toUpperCase();
-  };
+const SendSuccessScreen = React.forwardRef<HTMLDivElement, SendSuccessScreenProps>(
+  ({ recipient, amount, onDone }, ref) => {
+    const getInitials = (name: string) => {
+      return name.split(' ').map((n) => n[0]).join('').toUpperCase();
+    };
 
-  return (
-    <div className="screen-container flex flex-col items-center justify-center min-h-screen animate-fade-in">
-      {/* Success Icon */}
-      <div className="relative mb-8">
-        <div className="w-24 h-24 rounded-full bg-success flex items-center justify-center animate-success shadow-lg">
-          <Check className="w-12 h-12 text-success-foreground" strokeWidth={3} />
-        </div>
-        <div className="absolute inset-0 rounded-full bg-success/30 animate-ping" />
-      </div>
-
-      {/* Message */}
-      <h1 className="text-3xl font-bold text-foreground mb-2">Sent!</h1>
-      <p className="text-muted-foreground text-center mb-8">
-        Your payment was successful
-      </p>
-
-      {/* Details */}
-      <div className="w-full max-w-xs bg-card rounded-2xl p-6 border border-border/50 mb-8">
-        <div className="flex items-center justify-center gap-3 mb-4">
-          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-primary-foreground font-semibold">
-            {getInitials(recipient.name)}
+    return (
+      <div ref={ref} className="screen-container flex flex-col items-center justify-center min-h-screen animate-fade-in safe-top">
+        {/* Success Icon */}
+        <div className="relative mb-8">
+          <div className="w-24 h-24 rounded-full bg-success flex items-center justify-center animate-success shadow-lg">
+            <Check className="w-12 h-12 text-success-foreground" strokeWidth={3} />
           </div>
-          <div className="text-left">
-            <p className="font-semibold text-foreground">{recipient.name}</p>
-            <p className="text-sm text-muted-foreground">@{recipient.username}</p>
+          <div className="absolute inset-0 rounded-full bg-success/30 animate-ping" />
+        </div>
+
+        {/* Message */}
+        <h1 className="text-3xl font-bold text-foreground mb-2">Sent!</h1>
+        <p className="text-muted-foreground text-center mb-8">
+          Your payment was successful
+        </p>
+
+        {/* Details */}
+        <div className="w-full max-w-xs bg-card rounded-2xl p-5 sm:p-6 border border-border/50 mb-8">
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-primary-foreground font-semibold">
+              {getInitials(recipient.name)}
+            </div>
+            <div className="text-left min-w-0">
+              <p className="font-semibold text-foreground truncate">{recipient.name}</p>
+              <p className="text-sm text-muted-foreground">@{recipient.username}</p>
+            </div>
+          </div>
+          <div className="text-center pt-4 border-t border-border/50">
+            <p className="text-2xl sm:text-3xl font-bold text-foreground">{formatCurrency(amount)}</p>
           </div>
         </div>
-        <div className="text-center pt-4 border-t border-border/50">
-          <p className="text-3xl font-bold text-foreground">{formatCurrency(amount)}</p>
+
+        {/* Done Button */}
+        <div className="w-full max-w-xs safe-bottom pb-4">
+          <Button size="full" onClick={onDone}>
+            Done
+          </Button>
         </div>
       </div>
+    );
+  }
+);
 
-      {/* Done Button */}
-      <Button size="full" onClick={onDone} className="max-w-xs">
-        Done
-      </Button>
-    </div>
-  );
-};
+SendSuccessScreen.displayName = 'SendSuccessScreen';
 
 export default SendSuccessScreen;
