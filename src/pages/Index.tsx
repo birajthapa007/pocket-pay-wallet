@@ -20,6 +20,7 @@ import NotificationsScreen from '@/components/screens/NotificationsScreen';
 import HelpScreen from '@/components/screens/HelpScreen';
 import CardsScreen from '@/components/screens/CardsScreen';
 import ContactProfileScreen from '@/components/screens/ContactProfileScreen';
+import TransactionDetailScreen from '@/components/screens/TransactionDetailScreen';
 import BottomNav from '@/components/navigation/BottomNav';
 
 const Index = () => {
@@ -27,6 +28,7 @@ const Index = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [selectedRecipient, setSelectedRecipient] = useState<User | null>(null);
   const [selectedContact, setSelectedContact] = useState<User | null>(null);
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [sendAmount, setSendAmount] = useState<number>(0);
   const [requestAmount, setRequestAmount] = useState<number>(0);
   const [requestNote, setRequestNote] = useState<string>('');
@@ -37,6 +39,7 @@ const Index = () => {
     security: { biometric: false, twoFactor: true },
     privacy: { hideBalance: false, privateMode: false },
   });
+  const [previousScreen, setPreviousScreen] = useState<Screen>('home');
 
   const handleLogin = () => {
     setIsLoggedIn(true);
@@ -91,11 +94,19 @@ const Index = () => {
     setCurrentScreen('home');
   };
 
-  const handleTransactionClick = (transaction: Transaction) => {
-    const contact = transaction.recipient || transaction.sender;
-    if (contact && contact.id !== 'unknown') {
-      setSelectedContact(contact);
-      setCurrentScreen('contact-profile');
+  const handleTransactionClick = (transaction: Transaction, fromScreen: Screen = 'home') => {
+    setSelectedTransaction(transaction);
+    setPreviousScreen(fromScreen);
+    setCurrentScreen('transaction-detail');
+  };
+
+  const handleViewContactFromTransaction = () => {
+    if (selectedTransaction) {
+      const contact = selectedTransaction.recipient || selectedTransaction.sender;
+      if (contact && contact.id !== 'unknown') {
+        setSelectedContact(contact);
+        setCurrentScreen('contact-profile');
+      }
     }
   };
 
@@ -114,7 +125,8 @@ const Index = () => {
   const flowScreens = [
     'send', 'send-amount', 'send-confirm', 'send-success', 
     'receive', 'request', 'request-amount', 'request-success',
-    'profile', 'security', 'notifications', 'help', 'cards', 'contact-profile'
+    'profile', 'security', 'notifications', 'help', 'cards', 
+    'contact-profile', 'transaction-detail'
   ];
   const showNav = isLoggedIn && !flowScreens.includes(currentScreen);
 
@@ -135,7 +147,7 @@ const Index = () => {
             onViewHistory={() => setCurrentScreen('history')}
             onOpenProfile={() => setCurrentScreen('settings')}
             onNavigate={handleNavigate}
-            onTransactionClick={handleTransactionClick}
+            onTransactionClick={(t) => handleTransactionClick(t, 'home')}
           />
         );
       case 'send':
@@ -202,7 +214,7 @@ const Index = () => {
         return (
           <HistoryScreen 
             transactions={transactions} 
-            onTransactionClick={handleTransactionClick}
+            onTransactionClick={(t) => handleTransactionClick(t, 'history')}
           />
         );
       case 'insights':
@@ -264,7 +276,16 @@ const Index = () => {
               setSelectedRecipient(selectedContact);
               setCurrentScreen('request-amount');
             }}
-            onBack={() => setCurrentScreen('history')}
+            onBack={() => setCurrentScreen(previousScreen)}
+          />
+        );
+      case 'transaction-detail':
+        return (
+          <TransactionDetailScreen
+            transaction={selectedTransaction!}
+            onBack={() => setCurrentScreen(previousScreen)}
+            onViewProfile={handleViewContactFromTransaction}
+            onNavigate={handleNavigate}
           />
         );
       default:

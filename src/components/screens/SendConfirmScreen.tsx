@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, AlertTriangle, Shield } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, ShieldCheck, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { User } from '@/types/wallet';
 import { formatCurrency } from '@/data/mockData';
@@ -48,9 +48,9 @@ const SendConfirmScreen = React.forwardRef<HTMLDivElement, SendConfirmScreenProp
             <p className="text-3xl sm:text-4xl font-bold text-foreground">{formatCurrency(amount)}</p>
           </div>
 
-          {/* Security Prompt */}
-          {showSecurityPrompt && (
-            <div className="security-prompt animate-fade-in">
+          {/* Security Prompt for large amounts */}
+          {showSecurityPrompt ? (
+            <div className="bg-warning-soft border border-warning/20 rounded-2xl p-4 animate-fade-in">
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-full bg-warning/20 flex items-center justify-center flex-shrink-0">
                   <AlertTriangle className="w-5 h-5 text-warning" />
@@ -60,7 +60,24 @@ const SendConfirmScreen = React.forwardRef<HTMLDivElement, SendConfirmScreenProp
                     Confirm this transfer
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    This is a larger amount than usual. Please confirm you want to proceed.
+                    This is a larger amount than usual. We double-checked this transfer for your security.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Normal security confirmation */
+            <div className="bg-success-soft/50 border border-success/20 rounded-2xl p-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-success/20 flex items-center justify-center flex-shrink-0">
+                  <ShieldCheck className="w-5 h-5 text-success" />
+                </div>
+                <div>
+                  <p className="font-semibold text-foreground mb-1">
+                    Ready to send
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    We've verified this recipient. Your transfer is protected.
                   </p>
                 </div>
               </div>
@@ -68,9 +85,9 @@ const SendConfirmScreen = React.forwardRef<HTMLDivElement, SendConfirmScreenProp
           )}
 
           {/* Security badge */}
-          <div className="flex items-center justify-center gap-2 mt-6 text-muted-foreground">
-            <Shield className="w-4 h-4 text-primary" />
-            <span className="text-sm">Protected by Pocket Pay</span>
+          <div className="flex items-center justify-center gap-2 mt-6">
+            <Lock className="w-4 h-4 text-primary" />
+            <span className="text-sm text-muted-foreground">256-bit encrypted transfer</span>
           </div>
         </div>
 
