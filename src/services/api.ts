@@ -361,7 +361,7 @@ export const cardsApi = {
 
 export const authApi = {
   // Send OTP to email using custom edge function (shows code in email)
-  async sendOtpEmail(email: string, action: 'signup' | 'login' | 'recovery' = 'login', metadata?: { name?: string; username?: string }): Promise<{ error: string | null }> {
+  async sendOtpEmail(email: string, action: 'signup' | 'login' | 'recovery' = 'login', metadata?: { name?: string; username?: string }): Promise<{ error: string | null; testCode?: string }> {
     try {
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/auth-otp?action=send`;
       
@@ -385,7 +385,8 @@ export const authApi = {
         return { error: data.error || 'Failed to send verification code' };
       }
       
-      return { error: null };
+      // Return test code if email couldn't be sent (Resend domain not verified)
+      return { error: null, testCode: data.test_code };
     } catch (err) {
       console.error('Send OTP error:', err);
       return { error: 'Failed to send verification code' };
