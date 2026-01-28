@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Screen, User, Transaction, UserSettings } from '@/types/wallet';
-import { contacts, walletBalance, transactions as mockTransactions, currentUser } from '@/data/mockData';
-import { supabase } from '@/integrations/supabase/client';
+import { Screen, User, Transaction, UserSettings, WalletBalance } from '@/types/wallet';
+import { RecipientWithWallet } from '@/types/recipient';
+import { useAuth } from '@/hooks/useAuth';
+import { useWalletSummary, useTransactions, useContacts, useSendMoney, useCreateRequest, useLookupUser } from '@/hooks/useWallet';
+import { formatCurrency } from '@/data/mockData';
 import AuthScreen from '@/components/screens/AuthScreen';
 import OnboardingScreen from '@/components/screens/OnboardingScreen';
 import HomeScreen from '@/components/screens/HomeScreen';
@@ -27,18 +29,16 @@ import ScanScreen from '@/components/screens/ScanScreen';
 import BottomNav from '@/components/navigation/BottomNav';
 
 const Index = () => {
+  const { isLoggedIn, isLoading: isAuthLoading, user, signOut, updateUser } = useAuth();
   const [currentScreen, setCurrentScreen] = useState<Screen>('auth');
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [selectedRecipient, setSelectedRecipient] = useState<User | null>(null);
+  const [selectedRecipient, setSelectedRecipient] = useState<RecipientWithWallet | null>(null);
   const [selectedContact, setSelectedContact] = useState<User | null>(null);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [sendAmount, setSendAmount] = useState<number>(0);
   const [sendNote, setSendNote] = useState<string>('');
   const [requestAmount, setRequestAmount] = useState<number>(0);
   const [requestNote, setRequestNote] = useState<string>('');
-  const [transactions, setTransactions] = useState<Transaction[]>(mockTransactions);
-  const [user, setUser] = useState<User>(currentUser);
+  const [lastTransaction, setLastTransaction] = useState<Transaction | null>(null);
   const [settings, setSettings] = useState<UserSettings>({
     notifications: { transactions: true, security: true, marketing: false },
     security: { biometric: false, twoFactor: true },
@@ -46,64 +46,71 @@ const Index = () => {
   });
   const [previousScreen, setPreviousScreen] = useState<Screen>('home');
 
-  // Check auth state on mount
+  // Fetch data from backend
+  const { data: walletData, isLoading: isWalletLoading, refetch: refetchWallet } = useWalletSummary();
+  const { data: allTransactions = [], refetch: refetchTransactions } = useTransactions();
+  const { data: contacts = [] } = useContacts();
+  const sendMoney = useSendMoney();
+  const createRequest = useCreateRequest();
+  const lookupUser = useLookupUser();
+
+  // Navigate based on auth state
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session?.user) {
-        setIsLoggedIn(true);
-        // Update user info from session
-        setUser({
-          id: session.user.id,
-          name: session.user.user_metadata?.name || 'User',
-          username: session.user.user_metadata?.username || 'user',
-          email: session.user.email,
-        });
-        if (currentScreen === 'auth') {
-          setCurrentScreen('home');
-        }
-      } else {
-        setIsLoggedIn(false);
+    if (!isAuthLoading) {
+      if (isLoggedIn && currentScreen === 'auth') {
+        setCurrentScreen('home');
+      } else if (!isLoggedIn) {
         setCurrentScreen('auth');
       }
-      setIsCheckingAuth(false);
-    });
+    }
+  }, [isLoggedIn, isAuthLoading]);
 
-    // Initial session check
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setIsLoggedIn(true);
-        setUser({
-          id: session.user.id,
-          name: session.user.user_metadata?.name || 'User',
-          username: session.user.user_metadata?.username || 'user',
-          email: session.user.email,
-        });
-        setCurrentScreen('home');
-      }
-      setIsCheckingAuth(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
+  // Derived state
+  const balance: WalletBalance = walletData?.balance || { available: 0, pending: 0, total: 0 };
+  const transactions = allTransactions.length > 0 ? allTransactions : (walletData?.transactions || []);
 
   const handleAuthSuccess = () => {
-    setIsLoggedIn(true);
     setCurrentScreen('home');
   };
 
-  const handleLogin = () => {
-    setIsLoggedIn(true);
-    setCurrentScreen('home');
+  const handleSelectRecipient = async (selectedUser: User) => {
+    // Look up the user's wallet ID
+    try {
+      const result = await lookupUser.mutateAsync(selectedUser.username);
+      setSelectedRecipient({
+        ...selectedUser,
+        id: result.user.id,
+        wallet_id: result.wallet_id,
+      });
+      setCurrentScreen('send-amount');
+    } catch (error) {
+      console.error('Failed to lookup user:', error);
+      // Still proceed but without wallet_id - will fail on send
+      setSelectedRecipient({
+        ...selectedUser,
+        wallet_id: '',
+      });
+      setCurrentScreen('send-amount');
+    }
   };
 
-  const handleSelectRecipient = (user: User) => {
-    setSelectedRecipient(user);
-    setCurrentScreen('send-amount');
-  };
-
-  const handleSelectRequestFrom = (user: User) => {
-    setSelectedRecipient(user);
-    setCurrentScreen('request-amount');
+  const handleSelectRequestFrom = async (selectedUser: User) => {
+    try {
+      const result = await lookupUser.mutateAsync(selectedUser.username);
+      setSelectedRecipient({
+        ...selectedUser,
+        id: result.user.id,
+        wallet_id: result.wallet_id,
+      });
+      setCurrentScreen('request-amount');
+    } catch (error) {
+      console.error('Failed to lookup user:', error);
+      setSelectedRecipient({
+        ...selectedUser,
+        wallet_id: '',
+      });
+      setCurrentScreen('request-amount');
+    }
   };
 
   const handleSetAmount = (amount: number, note: string) => {
@@ -112,30 +119,73 @@ const Index = () => {
     setCurrentScreen('send-confirm');
   };
 
-  const handleSetRequestAmount = (amount: number, note: string) => {
+  const handleSetRequestAmount = async (amount: number, note: string) => {
     setRequestAmount(amount);
     setRequestNote(note);
-    setCurrentScreen('request-success');
+    
+    // Send the request to backend
+    if (selectedRecipient?.wallet_id) {
+      try {
+        await createRequest.mutateAsync({
+          requested_from_wallet_id: selectedRecipient.wallet_id,
+          amount,
+          note: note || undefined,
+        });
+        setCurrentScreen('request-success');
+      } catch (error) {
+        // Error is handled by the hook
+        console.error('Request failed:', error);
+      }
+    } else {
+      // Fallback for demo - just show success
+      setCurrentScreen('request-success');
+    }
   };
 
-  const handleConfirmSend = () => {
-    const newTransaction: Transaction = {
-      id: `t${Date.now()}`,
-      type: 'send',
-      amount: sendAmount,
-      status: 'completed',
-      description: sendNote,
-      recipient: selectedRecipient!,
-      createdAt: new Date(),
-    };
-    setTransactions([newTransaction, ...transactions]);
-    setCurrentScreen('send-success');
+  const handleConfirmSend = async () => {
+    if (!selectedRecipient?.wallet_id) {
+      console.error('No recipient wallet ID');
+      return;
+    }
+
+    try {
+      const result = await sendMoney.mutateAsync({
+        recipient_wallet_id: selectedRecipient.wallet_id,
+        amount: sendAmount,
+        description: sendNote,
+      });
+
+      // Store the transaction for the success screen
+      if (result.transaction) {
+        setLastTransaction({
+          id: result.transaction.id,
+          type: 'send',
+          amount: sendAmount,
+          status: result.transaction.status === 'completed' ? 'completed' : 
+                  result.transaction.status === 'blocked' ? 'blocked' : 'pending',
+          description: sendNote,
+          recipient: selectedRecipient,
+          createdAt: new Date(),
+          isRisky: result.transaction.is_risky,
+        });
+      }
+
+      // Refresh wallet data
+      refetchWallet();
+      refetchTransactions();
+      
+      setCurrentScreen('send-success');
+    } catch (error) {
+      // Error handled by hook's onError
+      console.error('Send failed:', error);
+    }
   };
 
   const handleSendComplete = () => {
     setSelectedRecipient(null);
     setSendAmount(0);
     setSendNote('');
+    setLastTransaction(null);
     setCurrentScreen('home');
   };
 
@@ -167,11 +217,16 @@ const Index = () => {
   };
 
   const handleUpdateUser = (updates: Partial<User>) => {
-    setUser({ ...user, ...updates });
+    updateUser(updates);
   };
 
   const handleUpdateSettings = (updates: Partial<UserSettings>) => {
     setSettings({ ...settings, ...updates });
+  };
+
+  const handleLogout = async () => {
+    await signOut();
+    setCurrentScreen('auth');
   };
 
   const flowScreens = [
@@ -183,7 +238,7 @@ const Index = () => {
   const showNav = isLoggedIn && !flowScreens.includes(currentScreen);
 
   // Show loading while checking auth
-  if (isCheckingAuth) {
+  if (isAuthLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-pulse text-primary text-lg">Loading...</div>
@@ -196,13 +251,13 @@ const Index = () => {
       case 'auth':
         return <AuthScreen onSuccess={handleAuthSuccess} />;
       case 'onboarding':
-        return <OnboardingScreen onComplete={handleLogin} />;
+        return <OnboardingScreen onComplete={() => setCurrentScreen('home')} />;
       case 'home':
         return (
           <HomeScreen
-            balance={walletBalance}
+            balance={balance}
             transactions={transactions.slice(0, 4)}
-            user={user}
+            user={user || { id: '', name: 'User', username: 'user' }}
             hideBalance={settings.privacy.hideBalance}
             onSend={() => setCurrentScreen('send')}
             onReceive={() => setCurrentScreen('receive')}
@@ -212,6 +267,7 @@ const Index = () => {
             onOpenProfile={() => setCurrentScreen('settings')}
             onNavigate={handleNavigate}
             onTransactionClick={(t) => handleTransactionClick(t, 'home')}
+            isLoading={isWalletLoading}
           />
         );
       case 'send':
@@ -220,12 +276,14 @@ const Index = () => {
             contacts={contacts}
             onSelectRecipient={handleSelectRecipient}
             onBack={() => setCurrentScreen('home')}
+            isLoading={lookupUser.isPending}
           />
         );
       case 'send-amount':
         return (
           <SendAmountScreen
             recipient={selectedRecipient!}
+            balance={balance}
             onSetAmount={handleSetAmount}
             onBack={() => setCurrentScreen('send')}
           />
@@ -238,6 +296,7 @@ const Index = () => {
             note={sendNote}
             onConfirm={handleConfirmSend}
             onBack={() => setCurrentScreen('send-amount')}
+            isLoading={sendMoney.isPending}
           />
         );
       case 'send-success':
@@ -246,17 +305,19 @@ const Index = () => {
             recipient={selectedRecipient!}
             amount={sendAmount}
             note={sendNote}
+            transaction={lastTransaction}
             onDone={handleSendComplete}
           />
         );
       case 'receive':
-        return <ReceiveScreen user={user} onBack={() => setCurrentScreen('home')} />;
+        return <ReceiveScreen user={user || { id: '', name: 'User', username: 'user' }} onBack={() => setCurrentScreen('home')} />;
       case 'request':
         return (
           <RequestScreen
             contacts={contacts}
             onSelectRecipient={handleSelectRequestFrom}
             onBack={() => setCurrentScreen('home')}
+            isLoading={lookupUser.isPending}
           />
         );
       case 'request-amount':
@@ -265,6 +326,7 @@ const Index = () => {
             requestFrom={selectedRecipient!}
             onSetAmount={handleSetRequestAmount}
             onBack={() => setCurrentScreen('request')}
+            isLoading={createRequest.isPending}
           />
         );
       case 'request-success':
@@ -288,19 +350,15 @@ const Index = () => {
       case 'settings':
         return (
           <SettingsScreen
-            user={user}
+            user={user || { id: '', name: 'User', username: 'user' }}
             onNavigate={handleNavigate}
-            onLogout={async () => {
-              await supabase.auth.signOut();
-              setIsLoggedIn(false);
-              setCurrentScreen('auth');
-            }}
+            onLogout={handleLogout}
           />
         );
       case 'profile':
         return (
           <ProfileScreen
-            user={user}
+            user={user || { id: '', name: 'User', username: 'user' }}
             onUpdate={handleUpdateUser}
             onBack={() => setCurrentScreen('settings')}
           />
@@ -336,12 +394,38 @@ const Index = () => {
             contact={selectedContact!}
             transactions={transactions}
             onSend={() => {
-              setSelectedRecipient(selectedContact);
-              setCurrentScreen('send-amount');
+              if (selectedContact) {
+                lookupUser.mutateAsync(selectedContact.username).then((result) => {
+                  setSelectedRecipient({
+                    ...selectedContact,
+                    wallet_id: result.wallet_id,
+                  });
+                  setCurrentScreen('send-amount');
+                }).catch(() => {
+                  setSelectedRecipient({
+                    ...selectedContact,
+                    wallet_id: '',
+                  });
+                  setCurrentScreen('send-amount');
+                });
+              }
             }}
             onRequest={() => {
-              setSelectedRecipient(selectedContact);
-              setCurrentScreen('request-amount');
+              if (selectedContact) {
+                lookupUser.mutateAsync(selectedContact.username).then((result) => {
+                  setSelectedRecipient({
+                    ...selectedContact,
+                    wallet_id: result.wallet_id,
+                  });
+                  setCurrentScreen('request-amount');
+                }).catch(() => {
+                  setSelectedRecipient({
+                    ...selectedContact,
+                    wallet_id: '',
+                  });
+                  setCurrentScreen('request-amount');
+                });
+              }
             }}
             onBack={() => setCurrentScreen(previousScreen)}
           />
@@ -359,12 +443,27 @@ const Index = () => {
         return (
           <ScanScreen
             onUserFound={(foundUser, action) => {
-              setSelectedRecipient(foundUser);
-              if (action === 'send') {
-                setCurrentScreen('send-amount');
-              } else {
-                setCurrentScreen('request-amount');
-              }
+              lookupUser.mutateAsync(foundUser.username).then((result) => {
+                setSelectedRecipient({
+                  ...foundUser,
+                  wallet_id: result.wallet_id,
+                });
+                if (action === 'send') {
+                  setCurrentScreen('send-amount');
+                } else {
+                  setCurrentScreen('request-amount');
+                }
+              }).catch(() => {
+                setSelectedRecipient({
+                  ...foundUser,
+                  wallet_id: '',
+                });
+                if (action === 'send') {
+                  setCurrentScreen('send-amount');
+                } else {
+                  setCurrentScreen('request-amount');
+                }
+              });
             }}
             onBack={() => setCurrentScreen('home')}
           />

@@ -7,6 +7,7 @@ interface SendScreenProps {
   contacts: User[];
   onSelectRecipient: (user: User) => void;
   onBack: () => void;
+  isLoading?: boolean;
 }
 
 const SendScreen = React.forwardRef<HTMLDivElement, SendScreenProps>(

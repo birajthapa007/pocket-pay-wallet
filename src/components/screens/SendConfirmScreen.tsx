@@ -10,10 +10,11 @@ interface SendConfirmScreenProps {
   note: string;
   onConfirm: () => void;
   onBack: () => void;
+  isLoading?: boolean;
 }
 
 const SendConfirmScreen = React.forwardRef<HTMLDivElement, SendConfirmScreenProps>(
-  ({ recipient, amount, note, onConfirm, onBack }, ref) => {
+  ({ recipient, amount, note, onConfirm, onBack, isLoading = false }, ref) => {
     const [isConfirming, setIsConfirming] = useState(false);
     const showSecurityPrompt = amount > 500;
 
@@ -23,10 +24,7 @@ const SendConfirmScreen = React.forwardRef<HTMLDivElement, SendConfirmScreenProp
 
     const handleConfirmClick = () => {
       setIsConfirming(true);
-      // Small delay to show the confirming state
-      setTimeout(() => {
-        onConfirm();
-      }, 500);
+      onConfirm();
     };
 
     return (

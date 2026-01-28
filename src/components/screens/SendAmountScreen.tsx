@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Delete, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { User } from '@/types/wallet';
-import { walletBalance } from '@/data/mockData';
+import { User, WalletBalance } from '@/types/wallet';
 
 interface SendAmountScreenProps {
   recipient: User;
+  balance: WalletBalance;
   onSetAmount: (amount: number, note: string) => void;
   onBack: () => void;
 }
 
 const SendAmountScreen = React.forwardRef<HTMLDivElement, SendAmountScreenProps>(
-  ({ recipient, onSetAmount, onBack }, ref) => {
+  ({ recipient, balance, onSetAmount, onBack }, ref) => {
     const [amount, setAmount] = useState('0');
     const [note, setNote] = useState('');
 
@@ -41,7 +41,7 @@ const SendAmountScreen = React.forwardRef<HTMLDivElement, SendAmountScreenProps>
     };
 
     const numAmount = parseFloat(amount) || 0;
-    const isOverBalance = numAmount > walletBalance.available;
+    const isOverBalance = numAmount > balance.available;
     const isValid = numAmount > 0 && !isOverBalance && note.trim().length > 0;
 
     const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'delete'];
