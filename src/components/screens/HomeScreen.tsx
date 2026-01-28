@@ -19,6 +19,7 @@ interface HomeScreenProps {
   onOpenProfile: () => void;
   onNavigate: (screen: Screen) => void;
   onTransactionClick: (transaction: Transaction) => void;
+  isLoading?: boolean;
 }
 
 const HomeScreen = React.forwardRef<HTMLDivElement, HomeScreenProps>(({ 

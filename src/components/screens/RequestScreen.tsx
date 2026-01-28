@@ -7,6 +7,7 @@ interface RequestScreenProps {
   contacts: User[];
   onSelectRecipient: (user: User) => void;
   onBack: () => void;
+  isLoading?: boolean;
 }
 
 const RequestScreen = React.forwardRef<HTMLDivElement, RequestScreenProps>(

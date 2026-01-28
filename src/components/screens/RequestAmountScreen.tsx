@@ -8,10 +8,11 @@ interface RequestAmountScreenProps {
   requestFrom: User;
   onSetAmount: (amount: number, note: string) => void;
   onBack: () => void;
+  isLoading?: boolean;
 }
 
 const RequestAmountScreen = React.forwardRef<HTMLDivElement, RequestAmountScreenProps>(
-  ({ requestFrom, onSetAmount, onBack }, ref) => {
+  ({ requestFrom, onSetAmount, onBack, isLoading = false }, ref) => {
     const [amount, setAmount] = useState('0');
     const [note, setNote] = useState('');
 
@@ -104,10 +105,17 @@ const RequestAmountScreen = React.forwardRef<HTMLDivElement, RequestAmountScreen
           variant="confirm"
           size="full"
           onClick={() => onSetAmount(numericAmount, note)}
-          disabled={numericAmount <= 0}
+          disabled={numericAmount <= 0 || isLoading}
           className="mb-4"
         >
-          Request ${numericAmount.toFixed(2)}
+          {isLoading ? (
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              Sending...
+            </div>
+          ) : (
+            `Request $${numericAmount.toFixed(2)}`
+          )}
         </Button>
       </div>
     );
