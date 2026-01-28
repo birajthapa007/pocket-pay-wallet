@@ -4,6 +4,7 @@ import { RecipientWithWallet } from '@/types/recipient';
 import { useAuth } from '@/hooks/useAuth';
 import { useWalletSummary, useTransactions, useContacts, useSendMoney, useCreateRequest, useLookupUser, useMoneyRequests, useAcceptRequest, useDeclineRequest } from '@/hooks/useWallet';
 import { useSettings } from '@/hooks/useSettings';
+import { useDeposit, useWithdraw } from '@/hooks/useBanking';
 import { formatCurrency } from '@/data/mockData';
 import AuthScreen from '@/components/screens/AuthScreen';
 import OnboardingScreen from '@/components/screens/OnboardingScreen';
@@ -27,6 +28,8 @@ import CardsScreen from '@/components/screens/CardsScreen';
 import ContactProfileScreen from '@/components/screens/ContactProfileScreen';
 import TransactionDetailScreen from '@/components/screens/TransactionDetailScreen';
 import ScanScreen from '@/components/screens/ScanScreen';
+import DepositScreen from '@/components/screens/DepositScreen';
+import WithdrawScreen from '@/components/screens/WithdrawScreen';
 import BottomNav from '@/components/navigation/BottomNav';
 
 const Index = () => {
@@ -53,6 +56,8 @@ const Index = () => {
   const acceptRequest = useAcceptRequest();
   const declineRequest = useDeclineRequest();
   const lookupUser = useLookupUser();
+  const deposit = useDeposit();
+  const withdraw = useWithdraw();
 
   // Navigate based on auth state
   useEffect(() => {
@@ -230,7 +235,7 @@ const Index = () => {
     'auth', 'send', 'send-amount', 'send-confirm', 'send-success', 
     'receive', 'request', 'request-amount', 'request-success',
     'profile', 'security', 'notifications', 'help', 'cards', 
-    'contact-profile', 'transaction-detail', 'scan'
+    'contact-profile', 'transaction-detail', 'scan', 'deposit', 'withdraw'
   ];
   const showNav = isLoggedIn && !flowScreens.includes(currentScreen);
 
@@ -262,6 +267,8 @@ const Index = () => {
             onReceive={() => setCurrentScreen('receive')}
             onRequest={() => setCurrentScreen('request')}
             onScan={() => setCurrentScreen('scan')}
+            onDeposit={() => setCurrentScreen('deposit')}
+            onWithdraw={() => setCurrentScreen('withdraw')}
             onViewHistory={() => setCurrentScreen('history')}
             onOpenProfile={() => setCurrentScreen('settings')}
             onNavigate={handleNavigate}
@@ -482,6 +489,32 @@ const Index = () => {
               });
             }}
             onBack={() => setCurrentScreen('home')}
+          />
+        );
+      case 'deposit':
+        return (
+          <DepositScreen
+            onDeposit={async (amount, bankName) => {
+              await deposit.mutateAsync({ amount, bank_name: bankName });
+              refetchWallet();
+              refetchTransactions();
+            }}
+            onBack={() => setCurrentScreen('home')}
+            isLoading={deposit.isPending}
+          />
+        );
+      case 'withdraw':
+        return (
+          <WithdrawScreen
+            balance={balance}
+            onWithdraw={async (amount, speed, bankName) => {
+              const result = await withdraw.mutateAsync({ amount, speed, bank_name: bankName });
+              refetchWallet();
+              refetchTransactions();
+              return { fee: result.fee, total: result.total_debited };
+            }}
+            onBack={() => setCurrentScreen('home')}
+            isLoading={withdraw.isPending}
           />
         );
       default:

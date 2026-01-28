@@ -101,4 +101,6 @@ export type Screen =
   | 'card-details'
   | 'contact-profile'
   | 'transaction-detail'
-  | 'scan';
+  | 'scan'
+  | 'deposit'
+  | 'withdraw';
