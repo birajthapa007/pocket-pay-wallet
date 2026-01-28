@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Wallet, Shield, Loader2, Mail, Phone, ArrowLeft, KeyRound, Sparkles, Lock, UserPlus, LogIn } from 'lucide-react';
+import { Shield, Loader2, Mail, Phone, ArrowLeft, KeyRound, Sparkles, UserPlus, Zap, CreditCard, TrendingUp, Send, Fingerprint } from 'lucide-react';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { authApi } from '@/services/api';
 
@@ -12,7 +12,7 @@ interface AuthScreenProps {
 }
 
 type AuthMethod = 'email' | 'phone';
-type AuthStep = 'choose' | 'details' | 'otp' | 'password';
+type AuthStep = 'choose' | 'details' | 'otp' | 'password' | 'forgot';
 
 const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
@@ -46,7 +46,7 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
   };
 
   const handleBack = () => {
-    if (step === 'details') {
+    if (step === 'details' || step === 'forgot') {
       setStep('choose');
       setMethod(null);
     } else if (step === 'otp' || step === 'password') {
@@ -116,6 +116,48 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
       }
     } catch (err) {
       setError('Failed to send verification code');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      if (method === 'email') {
+        if (!email.trim() || !email.includes('@')) {
+          setError('Please enter a valid email');
+          setIsLoading(false);
+          return;
+        }
+        
+        const { error: otpError } = await authApi.sendOtpEmail(email);
+        if (otpError) {
+          setError(otpError);
+        } else {
+          setSuccessMessage(`Password reset code sent to ${email}`);
+          setStep('otp');
+        }
+      } else {
+        if (!phone || phone.length < 10) {
+          setError('Please enter a valid 10-digit phone number');
+          setIsLoading(false);
+          return;
+        }
+        
+        const fullPhone = `+1${phone}`;
+        const { error: otpError } = await authApi.sendOtpPhone(fullPhone);
+        if (otpError) {
+          setError(otpError);
+        } else {
+          setSuccessMessage(`Password reset code sent to ${fullPhone}`);
+          setStep('otp');
+        }
+      }
+    } catch (err) {
+      setError('Failed to send reset code');
     } finally {
       setIsLoading(false);
     }
@@ -216,20 +258,13 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
     visible: { opacity: 1, y: 0 }
   };
 
-  const slideVariants = {
-    enter: (direction: number) => ({
-      x: direction > 0 ? 300 : -300,
-      opacity: 0
-    }),
-    center: {
-      x: 0,
-      opacity: 1
-    },
-    exit: (direction: number) => ({
-      x: direction < 0 ? 300 : -300,
-      opacity: 0
-    })
-  };
+  // Floating icons for hero section
+  const floatingIcons = [
+    { icon: CreditCard, delay: 0, x: -60, y: -40 },
+    { icon: Send, delay: 0.2, x: 70, y: -30 },
+    { icon: TrendingUp, delay: 0.4, x: -50, y: 50 },
+    { icon: Zap, delay: 0.6, x: 60, y: 40 },
+  ];
 
   const renderChooseMethod = () => (
     <motion.div
@@ -250,30 +285,32 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
             <div className="relative inline-block mb-6">
               <motion.div
                 animate={{ 
-                  scale: [1, 1.1, 1],
-                  rotate: [0, 5, -5, 0]
+                  scale: [1, 1.05, 1],
+                  rotate: [0, 2, -2, 0]
                 }}
                 transition={{ 
-                  duration: 3,
+                  duration: 4,
                   repeat: Infinity,
                   repeatType: "reverse"
                 }}
-                className="w-20 h-20 rounded-3xl bg-gradient-to-br from-primary via-primary/80 to-accent flex items-center justify-center mx-auto shadow-lg shadow-primary/30"
+                className="w-24 h-24 rounded-[28px] bg-gradient-to-br from-primary via-primary/90 to-accent flex items-center justify-center mx-auto shadow-2xl shadow-primary/40 relative overflow-hidden"
               >
-                <Sparkles className="w-10 h-10 text-primary-foreground" />
+                {/* Inner glow effect */}
+                <div className="absolute inset-0 bg-gradient-to-t from-transparent via-white/10 to-white/20" />
+                <Sparkles className="w-12 h-12 text-primary-foreground relative z-10" />
               </motion.div>
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ delay: 0.3, type: "spring" }}
-                className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-accent flex items-center justify-center"
+                className="absolute -bottom-2 -right-2 w-10 h-10 rounded-full bg-gradient-to-br from-accent to-accent/80 flex items-center justify-center shadow-lg border-2 border-background"
               >
-                <UserPlus className="w-4 h-4 text-accent-foreground" />
+                <UserPlus className="w-5 h-5 text-accent-foreground" />
               </motion.div>
             </div>
-            <h2 className="text-2xl font-bold mb-2">Join Pocket Pay</h2>
-            <p className="text-muted-foreground">
-              Start your journey to smarter money management
+            <h2 className="text-3xl font-bold mb-3 bg-gradient-to-r from-foreground via-foreground to-primary bg-clip-text">Join Pocket Pay</h2>
+            <p className="text-muted-foreground text-lg">
+              Start your journey to smarter money
             </p>
           </motion.div>
 
@@ -281,85 +318,129 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
             <Button
               type="button"
               variant="outline"
-              className="w-full h-16 text-base font-medium rounded-2xl border-2 border-primary/20 hover:border-primary hover:bg-primary/5 flex items-center justify-start gap-4 px-5 group transition-all duration-300"
+              className="w-full h-[72px] text-base font-medium rounded-2xl border-2 border-primary/20 hover:border-primary hover:bg-primary/5 flex items-center justify-start gap-4 px-5 group transition-all duration-300"
               onClick={() => handleMethodSelect('email')}
             >
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center group-hover:from-primary/30 group-hover:to-primary/10 transition-all">
-                <Mail className="w-5 h-5 text-primary" />
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-lg shadow-primary/20 group-hover:shadow-primary/40 transition-all">
+                <Mail className="w-5 h-5 text-primary-foreground" />
               </div>
               <div className="text-left">
-                <div className="font-semibold">Continue with Email</div>
-                <div className="text-xs text-muted-foreground">We'll send a verification code</div>
+                <div className="font-semibold text-lg">Continue with Email</div>
+                <div className="text-sm text-muted-foreground">We'll send a verification code</div>
               </div>
             </Button>
             
             <Button
               type="button"
               variant="outline"
-              className="w-full h-16 text-base font-medium rounded-2xl border-2 border-accent/20 hover:border-accent hover:bg-accent/5 flex items-center justify-start gap-4 px-5 group transition-all duration-300"
+              className="w-full h-[72px] text-base font-medium rounded-2xl border-2 border-accent/30 hover:border-accent hover:bg-accent/5 flex items-center justify-start gap-4 px-5 group transition-all duration-300"
               onClick={() => handleMethodSelect('phone')}
             >
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-accent/20 to-accent/5 flex items-center justify-center group-hover:from-accent/30 group-hover:to-accent/10 transition-all">
-                <Phone className="w-5 h-5 text-accent" />
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-accent to-accent/70 flex items-center justify-center shadow-lg shadow-accent/20 group-hover:shadow-accent/40 transition-all">
+                <Phone className="w-5 h-5 text-accent-foreground" />
               </div>
               <div className="text-left">
-                <div className="font-semibold">Continue with Phone</div>
-                <div className="text-xs text-muted-foreground">Quick SMS verification</div>
+                <div className="font-semibold text-lg">Continue with Phone</div>
+                <div className="text-sm text-muted-foreground">Quick SMS verification</div>
               </div>
             </Button>
           </motion.div>
 
           <motion.div 
             variants={itemVariants}
-            className="mt-8 p-4 rounded-2xl bg-gradient-to-r from-primary/5 via-accent/5 to-primary/5 border border-primary/10"
+            className="mt-8 p-5 rounded-2xl bg-gradient-to-r from-primary/10 via-accent/5 to-primary/10 border border-primary/20"
           >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                <Shield className="w-5 h-5 text-primary" />
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+                <Shield className="w-6 h-6 text-primary" />
               </div>
               <div>
-                <p className="text-sm font-medium">Bank-level security</p>
-                <p className="text-xs text-muted-foreground">Your data is protected with 256-bit encryption</p>
+                <p className="font-semibold">Bank-level security</p>
+                <p className="text-sm text-muted-foreground">Your data is protected with 256-bit encryption</p>
               </div>
             </div>
           </motion.div>
         </div>
       ) : (
-        // LOGIN - Clean, professional design
+        // LOGIN - Premium hero section
         <div className="flex-1 flex flex-col">
+          {/* Hero Section with floating elements */}
           <motion.div 
             variants={itemVariants}
-            className="text-center mb-8"
+            className="text-center mb-10 relative"
           >
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ type: "spring", stiffness: 200 }}
-              className="w-16 h-16 rounded-2xl bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center mx-auto mb-5 border border-border"
+            {/* Floating icons */}
+            <div className="relative w-32 h-32 mx-auto mb-6">
+              {floatingIcons.map((item, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, scale: 0 }}
+                  animate={{ 
+                    opacity: 1, 
+                    scale: 1,
+                    x: [item.x - 5, item.x + 5, item.x - 5],
+                    y: [item.y - 5, item.y + 5, item.y - 5],
+                  }}
+                  transition={{
+                    delay: item.delay,
+                    duration: 4,
+                    repeat: Infinity,
+                    repeatType: "reverse",
+                  }}
+                  className="absolute left-1/2 top-1/2 w-10 h-10 rounded-xl bg-gradient-to-br from-muted to-secondary flex items-center justify-center shadow-lg border border-border/50"
+                  style={{ marginLeft: -20, marginTop: -20 }}
+                >
+                  <item.icon className="w-5 h-5 text-primary" />
+                </motion.div>
+              ))}
+              
+              {/* Main center icon */}
+              <motion.div
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ 
+                  scale: 1, 
+                  opacity: 1,
+                }}
+                transition={{ type: "spring", stiffness: 200 }}
+                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-2xl bg-gradient-to-br from-primary via-primary to-accent flex items-center justify-center shadow-2xl shadow-primary/30"
+              >
+                <div className="absolute inset-0 bg-gradient-to-t from-transparent via-white/5 to-white/20 rounded-2xl" />
+                <Fingerprint className="w-10 h-10 text-primary-foreground relative z-10" />
+              </motion.div>
+            </div>
+
+            <motion.h2 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="text-3xl font-bold mb-3"
             >
-              <Lock className="w-7 h-7 text-foreground" />
-            </motion.div>
-            <h2 className="text-2xl font-bold mb-2">Welcome Back</h2>
-            <p className="text-muted-foreground">
-              Sign in to access your wallet
-            </p>
+              Welcome Back
+            </motion.h2>
+            <motion.p 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="text-muted-foreground text-lg"
+            >
+              Your wallet is ready for you
+            </motion.p>
           </motion.div>
 
           <motion.div variants={itemVariants} className="space-y-3">
             <Button
               type="button"
-              variant="outline"
-              className="w-full h-14 text-base font-medium rounded-xl border hover:bg-muted/50 flex items-center justify-center gap-3 transition-all duration-200"
+              className="w-full h-14 text-base font-semibold rounded-2xl bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 shadow-lg shadow-primary/20 flex items-center justify-center gap-3 transition-all duration-300"
               onClick={() => handleMethodSelect('email')}
             >
-              <Mail className="w-5 h-5 text-muted-foreground" />
+              <Mail className="w-5 h-5" />
               <span>Sign in with Email</span>
             </Button>
             
             <Button
               type="button"
               variant="outline"
-              className="w-full h-14 text-base font-medium rounded-xl border hover:bg-muted/50 flex items-center justify-center gap-3 transition-all duration-200"
+              className="w-full h-14 text-base font-medium rounded-2xl border-2 border-border hover:bg-muted/50 flex items-center justify-center gap-3 transition-all duration-200"
               onClick={() => handleMethodSelect('phone')}
             >
               <Phone className="w-5 h-5 text-muted-foreground" />
@@ -369,10 +450,12 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
 
           <motion.div 
             variants={itemVariants}
-            className="mt-auto pt-8"
+            className="mt-auto pt-10"
           >
-            <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-              <Shield className="w-3.5 h-3.5" />
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                <Shield className="w-4 h-4 text-primary" />
+              </div>
               <span>Protected by Pocket Pay security</span>
             </div>
           </motion.div>
@@ -516,7 +599,7 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.4 }}
-            className="text-center"
+            className="flex flex-col gap-3 items-center"
           >
             <button
               type="button"
@@ -526,8 +609,130 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
               <KeyRound className="w-4 h-4" />
               Use password instead
             </button>
+            <button
+              type="button"
+              onClick={() => setStep('forgot')}
+              className="text-sm text-primary hover:text-primary/80 transition-colors font-medium"
+            >
+              Forgot password?
+            </button>
           </motion.div>
         )}
+      </div>
+    </motion.div>
+  );
+
+  const renderForgotPassword = () => (
+    <motion.div
+      key="forgot"
+      initial={{ opacity: 0, x: 50 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -50 }}
+      className="flex-1 flex flex-col"
+    >
+      <button
+        type="button"
+        onClick={handleBack}
+        className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-6 self-start"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        <span className="text-sm">Back</span>
+      </button>
+
+      <div className="flex-1 flex flex-col justify-center space-y-6">
+        <div className="text-center space-y-2">
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ type: "spring" }}
+            className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center mx-auto mb-4"
+          >
+            <KeyRound className="w-8 h-8 text-primary" />
+          </motion.div>
+          <h2 className="text-2xl font-bold">Reset Password</h2>
+          <p className="text-muted-foreground">
+            We'll send you a code to reset your password
+          </p>
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex gap-2 justify-center mb-4">
+            <button
+              type="button"
+              onClick={() => setMethod('email')}
+              className={`flex-1 py-3 rounded-xl text-sm font-medium transition-all ${
+                method === 'email' 
+                  ? 'bg-primary text-primary-foreground' 
+                  : 'bg-muted text-muted-foreground hover:bg-secondary'
+              }`}
+            >
+              Email
+            </button>
+            <button
+              type="button"
+              onClick={() => setMethod('phone')}
+              className={`flex-1 py-3 rounded-xl text-sm font-medium transition-all ${
+                method === 'phone' 
+                  ? 'bg-primary text-primary-foreground' 
+                  : 'bg-muted text-muted-foreground hover:bg-secondary'
+              }`}
+            >
+              Phone
+            </button>
+          </div>
+
+          {method === 'email' ? (
+            <Input
+              id="forgot-email"
+              type="email"
+              placeholder="Enter your email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="h-12 rounded-xl bg-muted/50 border-0 focus:ring-2 focus:ring-primary/50"
+              required
+            />
+          ) : method === 'phone' ? (
+            <div className="flex gap-2">
+              <div className="flex items-center justify-center px-4 bg-muted/50 rounded-xl text-muted-foreground font-medium h-12">
+                +1
+              </div>
+              <Input
+                id="forgot-phone"
+                type="tel"
+                placeholder="555 123 4567"
+                value={phone}
+                onChange={(e) => setPhone(formatPhoneNumber(e.target.value))}
+                className="h-12 rounded-xl bg-muted/50 border-0 focus:ring-2 focus:ring-primary/50 flex-1"
+                required
+              />
+            </div>
+          ) : (
+            <p className="text-center text-muted-foreground text-sm">Select a method above</p>
+          )}
+
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="p-3 rounded-xl bg-destructive/10 text-destructive text-sm"
+            >
+              {error}
+            </motion.div>
+          )}
+
+          <Button
+            type="button"
+            className="w-full h-14 text-base font-semibold rounded-xl"
+            disabled={isLoading || !method}
+            onClick={handleForgotPassword}
+          >
+            {isLoading ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              'Send Reset Code'
+            )}
+          </Button>
+        </div>
       </div>
     </motion.div>
   );
@@ -556,7 +761,11 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
           transition={{ type: "spring", stiffness: 200 }}
           className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center"
         >
-          <Mail className="w-8 h-8 text-primary" />
+          {method === 'email' ? (
+            <Mail className="w-8 h-8 text-primary" />
+          ) : (
+            <Phone className="w-8 h-8 text-primary" />
+          )}
         </motion.div>
 
         <div className="text-center space-y-2">
@@ -655,9 +864,9 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: "spring" }}
-            className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4"
+            className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center mx-auto mb-4"
           >
-            <Lock className="w-6 h-6 text-foreground" />
+            <Fingerprint className="w-7 h-7 text-primary" />
           </motion.div>
           <h2 className="text-xl font-semibold">Enter password</h2>
           <p className="text-muted-foreground text-sm">
@@ -699,7 +908,7 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
             )}
           </Button>
 
-          <div className="text-center">
+          <div className="flex flex-col gap-2 items-center">
             <button
               type="button"
               onClick={() => {
@@ -710,6 +919,13 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
             >
               Use verification code instead
             </button>
+            <button
+              type="button"
+              onClick={() => setStep('forgot')}
+              className="text-sm text-primary hover:text-primary/80 transition-colors font-medium"
+            >
+              Forgot password?
+            </button>
           </div>
         </div>
       </div>
@@ -717,19 +933,18 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
   );
 
   return (
-    <div className="screen-container flex flex-col min-h-screen overflow-hidden">
-      {/* Decorative background for signup */}
-      {mode === 'signup' && (
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-32 -right-32 w-64 h-64 rounded-full bg-primary/5 blur-3xl" />
-          <div className="absolute -bottom-32 -left-32 w-64 h-64 rounded-full bg-accent/5 blur-3xl" />
-        </div>
-      )}
+    <div className="screen-container flex flex-col min-h-screen overflow-hidden relative">
+      {/* Premium gradient background for both modes */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 rounded-full bg-primary/10 blur-[100px]" />
+        <div className="absolute top-1/2 -left-40 w-80 h-80 rounded-full bg-accent/10 blur-[100px]" />
+        <div className="absolute -bottom-40 right-1/4 w-60 h-60 rounded-full bg-primary/5 blur-[80px]" />
+      </div>
 
-      {/* Header - Compact for login, prominent for signup */}
+      {/* Header with premium logo */}
       <motion.div 
         layout
-        className={`safe-top text-center relative z-10 ${mode === 'signup' ? 'pt-8 pb-6' : 'pt-6 pb-4'}`}
+        className={`safe-top text-center relative z-10 ${mode === 'signup' ? 'pt-8 pb-6' : 'pt-10 pb-6'}`}
       >
         <AnimatePresence mode="wait">
           {step === 'choose' && (
@@ -740,14 +955,35 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
               exit={{ opacity: 0, y: 20 }}
               className="flex items-center justify-center gap-3"
             >
-              <div className={`rounded-2xl flex items-center justify-center ${
-                mode === 'signup' 
-                  ? 'w-12 h-12 bg-gradient-to-br from-primary to-primary/70 shadow-lg shadow-primary/20' 
-                  : 'w-10 h-10 bg-muted'
-              }`}>
-                <Wallet className={`text-primary-foreground ${mode === 'signup' ? 'w-6 h-6' : 'w-5 h-5'}`} />
-              </div>
-              <h1 className={`font-bold ${mode === 'signup' ? 'text-2xl' : 'text-xl'}`}>Pocket Pay</h1>
+              <motion.div 
+                whileHover={{ scale: 1.05 }}
+                className={`rounded-2xl flex items-center justify-center relative overflow-hidden ${
+                  mode === 'signup' 
+                    ? 'w-14 h-14' 
+                    : 'w-12 h-12'
+                }`}
+                style={{
+                  background: 'linear-gradient(135deg, hsl(175 70% 50%) 0%, hsl(175 60% 40%) 50%, hsl(180 50% 35%) 100%)',
+                  boxShadow: '0 8px 32px -8px hsla(175, 70%, 50%, 0.4)'
+                }}
+              >
+                <div className="absolute inset-0 bg-gradient-to-t from-transparent via-white/10 to-white/30" />
+                <svg 
+                  viewBox="0 0 24 24" 
+                  className={`relative z-10 ${mode === 'signup' ? 'w-7 h-7' : 'w-6 h-6'}`}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1" className="text-primary-foreground" />
+                  <path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4" className="text-primary-foreground" />
+                </svg>
+              </motion.div>
+              <h1 className={`font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text ${mode === 'signup' ? 'text-2xl' : 'text-xl'}`}>
+                Pocket Pay
+              </h1>
             </motion.div>
           )}
         </AnimatePresence>
@@ -760,6 +996,7 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
           {step === 'details' && renderDetailsForm()}
           {step === 'otp' && renderOtpVerification()}
           {step === 'password' && renderPasswordLogin()}
+          {step === 'forgot' && renderForgotPassword()}
         </AnimatePresence>
       </div>
 
