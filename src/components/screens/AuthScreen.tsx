@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Wallet, Shield, Loader2, Mail, Phone, ArrowLeft, KeyRound, Sparkles, Lock, UserPlus, LogIn } from 'lucide-react';
+import { Wallet, Shield, Loader2, Mail, Phone, ArrowLeft, KeyRound } from 'lucide-react';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { authApi } from '@/services/api';
 
@@ -30,7 +30,6 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
   const [username, setUsername] = useState('');
   const [otp, setOtp] = useState('');
   
-  // Reset form when mode changes
   useEffect(() => {
     setStep('choose');
     setMethod(null);
@@ -201,93 +200,78 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
     await handleSendOtp();
   };
 
-  // Animation variants
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: { 
-      opacity: 1,
-      transition: { staggerChildren: 0.1 }
-    },
-    exit: { opacity: 0, y: 20 }
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0 }
-  };
-
-  const slideVariants = {
-    enter: (direction: number) => ({
-      x: direction > 0 ? 300 : -300,
-      opacity: 0
-    }),
-    center: {
-      x: 0,
-      opacity: 1
-    },
-    exit: (direction: number) => ({
-      x: direction < 0 ? 300 : -300,
-      opacity: 0
-    })
+  // Pocket Pay Logo Component
+  const PocketPayLogo = ({ size = 'default' }: { size?: 'small' | 'default' | 'large' }) => {
+    const sizeClasses = {
+      small: 'w-10 h-10',
+      default: 'w-14 h-14',
+      large: 'w-20 h-20'
+    };
+    const iconSizes = {
+      small: 'w-5 h-5',
+      default: 'w-7 h-7',
+      large: 'w-10 h-10'
+    };
+    
+    return (
+      <div className={`${sizeClasses[size]} rounded-2xl bg-gradient-to-br from-primary via-primary to-primary/80 flex items-center justify-center shadow-lg shadow-primary/25`}>
+        <Wallet className={`${iconSizes[size]} text-primary-foreground`} />
+      </div>
+    );
   };
 
   const renderChooseMethod = () => (
     <motion.div
       key="choose"
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-      exit="exit"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
       className="flex-1 flex flex-col"
     >
       {mode === 'signup' ? (
-        // SIGNUP - Exciting, welcoming design
+        // SIGNUP - Welcoming, brand-focused design
         <div className="flex-1 flex flex-col">
           <motion.div 
-            variants={itemVariants}
-            className="text-center mb-8"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center mb-10"
           >
-            <div className="relative inline-block mb-6">
-              <motion.div
-                animate={{ 
-                  scale: [1, 1.1, 1],
-                  rotate: [0, 5, -5, 0]
-                }}
-                transition={{ 
-                  duration: 3,
-                  repeat: Infinity,
-                  repeatType: "reverse"
-                }}
-                className="w-20 h-20 rounded-3xl bg-gradient-to-br from-primary via-primary/80 to-accent flex items-center justify-center mx-auto shadow-lg shadow-primary/30"
-              >
-                <Sparkles className="w-10 h-10 text-primary-foreground" />
-              </motion.div>
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.3, type: "spring" }}
-                className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-accent flex items-center justify-center"
-              >
-                <UserPlus className="w-4 h-4 text-accent-foreground" />
-              </motion.div>
-            </div>
-            <h2 className="text-2xl font-bold mb-2">Join Pocket Pay</h2>
-            <p className="text-muted-foreground">
-              Start your journey to smarter money management
-            </p>
+            <motion.div
+              initial={{ scale: 0.8 }}
+              animate={{ scale: 1 }}
+              transition={{ type: "spring", stiffness: 200, delay: 0.1 }}
+              className="mb-6"
+            >
+              <PocketPayLogo size="large" />
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <h1 className="text-2xl font-bold mb-2">Create your wallet</h1>
+              <p className="text-muted-foreground">
+                Join thousands managing money the smart way
+              </p>
+            </motion.div>
           </motion.div>
 
-          <motion.div variants={itemVariants} className="space-y-3">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="space-y-3"
+          >
             <Button
               type="button"
               variant="outline"
-              className="w-full h-16 text-base font-medium rounded-2xl border-2 border-primary/20 hover:border-primary hover:bg-primary/5 flex items-center justify-start gap-4 px-5 group transition-all duration-300"
+              className="w-full h-16 text-base font-medium rounded-2xl border-2 border-border hover:border-primary/50 hover:bg-primary/5 flex items-center gap-4 px-5 transition-all duration-200"
               onClick={() => handleMethodSelect('email')}
             >
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center group-hover:from-primary/30 group-hover:to-primary/10 transition-all">
+              <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center">
                 <Mail className="w-5 h-5 text-primary" />
               </div>
-              <div className="text-left">
+              <div className="text-left flex-1">
                 <div className="font-semibold">Continue with Email</div>
                 <div className="text-xs text-muted-foreground">We'll send a verification code</div>
               </div>
@@ -296,13 +280,13 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
             <Button
               type="button"
               variant="outline"
-              className="w-full h-16 text-base font-medium rounded-2xl border-2 border-accent/20 hover:border-accent hover:bg-accent/5 flex items-center justify-start gap-4 px-5 group transition-all duration-300"
+              className="w-full h-16 text-base font-medium rounded-2xl border-2 border-border hover:border-primary/50 hover:bg-primary/5 flex items-center gap-4 px-5 transition-all duration-200"
               onClick={() => handleMethodSelect('phone')}
             >
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-accent/20 to-accent/5 flex items-center justify-center group-hover:from-accent/30 group-hover:to-accent/10 transition-all">
-                <Phone className="w-5 h-5 text-accent" />
+              <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center">
+                <Phone className="w-5 h-5 text-primary" />
               </div>
-              <div className="text-left">
+              <div className="text-left flex-1">
                 <div className="font-semibold">Continue with Phone</div>
                 <div className="text-xs text-muted-foreground">Quick SMS verification</div>
               </div>
@@ -310,69 +294,80 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
           </motion.div>
 
           <motion.div 
-            variants={itemVariants}
-            className="mt-8 p-4 rounded-2xl bg-gradient-to-r from-primary/5 via-accent/5 to-primary/5 border border-primary/10"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+            className="mt-auto pt-8"
           >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                <Shield className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">Bank-level security</p>
-                <p className="text-xs text-muted-foreground">Your data is protected with 256-bit encryption</p>
-              </div>
+            <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+              <Shield className="w-3.5 h-3.5 text-primary" />
+              <span>256-bit encryption • Bank-level security</span>
             </div>
           </motion.div>
         </div>
       ) : (
-        // LOGIN - Clean, professional design
+        // LOGIN - Clean, welcoming design
         <div className="flex-1 flex flex-col">
           <motion.div 
-            variants={itemVariants}
-            className="text-center mb-8"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center mb-10"
           >
             <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ type: "spring", stiffness: 200 }}
-              className="w-16 h-16 rounded-2xl bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center mx-auto mb-5 border border-border"
+              initial={{ scale: 0.8 }}
+              animate={{ scale: 1 }}
+              transition={{ type: "spring", stiffness: 200, delay: 0.1 }}
+              className="mb-6"
             >
-              <Lock className="w-7 h-7 text-foreground" />
+              <PocketPayLogo size="default" />
             </motion.div>
-            <h2 className="text-2xl font-bold mb-2">Welcome Back</h2>
-            <p className="text-muted-foreground">
-              Sign in to access your wallet
-            </p>
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <h1 className="text-2xl font-bold mb-2">Welcome back</h1>
+              <p className="text-muted-foreground">
+                Sign in to your Pocket Pay wallet
+              </p>
+            </motion.div>
           </motion.div>
 
-          <motion.div variants={itemVariants} className="space-y-3">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="space-y-3"
+          >
             <Button
               type="button"
               variant="outline"
-              className="w-full h-14 text-base font-medium rounded-xl border hover:bg-muted/50 flex items-center justify-center gap-3 transition-all duration-200"
+              className="w-full h-14 text-base font-medium rounded-xl border-2 border-border hover:border-primary/50 hover:bg-primary/5 flex items-center justify-center gap-3 transition-all duration-200"
               onClick={() => handleMethodSelect('email')}
             >
-              <Mail className="w-5 h-5 text-muted-foreground" />
+              <Mail className="w-5 h-5 text-primary" />
               <span>Sign in with Email</span>
             </Button>
             
             <Button
               type="button"
               variant="outline"
-              className="w-full h-14 text-base font-medium rounded-xl border hover:bg-muted/50 flex items-center justify-center gap-3 transition-all duration-200"
+              className="w-full h-14 text-base font-medium rounded-xl border-2 border-border hover:border-primary/50 hover:bg-primary/5 flex items-center justify-center gap-3 transition-all duration-200"
               onClick={() => handleMethodSelect('phone')}
             >
-              <Phone className="w-5 h-5 text-muted-foreground" />
+              <Phone className="w-5 h-5 text-primary" />
               <span>Sign in with Phone</span>
             </Button>
           </motion.div>
 
           <motion.div 
-            variants={itemVariants}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
             className="mt-auto pt-8"
           >
             <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-              <Shield className="w-3.5 h-3.5" />
+              <Shield className="w-3.5 h-3.5 text-primary" />
               <span>Protected by Pocket Pay security</span>
             </div>
           </motion.div>
@@ -398,6 +393,14 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
         <span className="text-sm">Back</span>
       </button>
 
+      {/* Mini logo header */}
+      <div className="flex items-center gap-2 mb-6">
+        <PocketPayLogo size="small" />
+        <span className="font-semibold text-lg">
+          {mode === 'signup' ? 'Create Account' : 'Sign In'}
+        </span>
+      </div>
+
       <div className="space-y-5">
         {mode === 'signup' && (
           <motion.div
@@ -414,7 +417,7 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
                 placeholder="Alex Johnson"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="h-12 rounded-xl bg-muted/50 border-0 focus:ring-2 focus:ring-primary/50"
+                className="h-12 rounded-xl bg-muted/50 border-border focus:border-primary focus:ring-1 focus:ring-primary"
                 required
               />
             </div>
@@ -428,7 +431,7 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
                   placeholder="alexj"
                   value={username}
                   onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                  className="h-12 pl-9 rounded-xl bg-muted/50 border-0 focus:ring-2 focus:ring-primary/50"
+                  className="h-12 pl-9 rounded-xl bg-muted/50 border-border focus:border-primary focus:ring-1 focus:ring-primary"
                   required
                 />
               </div>
@@ -453,7 +456,7 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
                 placeholder="alex@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="h-12 rounded-xl bg-muted/50 border-0 focus:ring-2 focus:ring-primary/50"
+                className="h-12 rounded-xl bg-muted/50 border-border focus:border-primary focus:ring-1 focus:ring-primary"
                 required
               />
             </div>
@@ -461,7 +464,7 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
             <div className="space-y-2">
               <Label htmlFor="phone" className="text-sm font-medium">Phone Number</Label>
               <div className="flex gap-2">
-                <div className="flex items-center justify-center px-4 bg-muted/50 rounded-xl text-muted-foreground font-medium h-12">
+                <div className="flex items-center justify-center px-4 bg-muted rounded-xl text-muted-foreground font-medium h-12 border border-border">
                   +1
                 </div>
                 <Input
@@ -470,7 +473,7 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
                   placeholder="555 123 4567"
                   value={phone}
                   onChange={(e) => setPhone(formatPhoneNumber(e.target.value))}
-                  className="h-12 rounded-xl bg-muted/50 border-0 focus:ring-2 focus:ring-primary/50 flex-1"
+                  className="h-12 rounded-xl bg-muted/50 border-border focus:border-primary focus:ring-1 focus:ring-primary flex-1"
                   required
                 />
               </div>
@@ -492,14 +495,11 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
+          className="pt-2"
         >
           <Button
             type="button"
-            className={`w-full h-14 text-base font-semibold rounded-xl ${
-              mode === 'signup' 
-                ? 'bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70' 
-                : ''
-            }`}
+            className="w-full h-14 text-base font-semibold rounded-xl bg-primary hover:bg-primary/90"
             disabled={isLoading}
             onClick={handleSendOtp}
           >
@@ -516,7 +516,7 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.4 }}
-            className="text-center"
+            className="text-center pt-2"
           >
             <button
               type="button"
@@ -551,12 +551,11 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
 
       <div className="flex-1 flex flex-col items-center justify-center space-y-6">
         <motion.div
-          initial={{ scale: 0 }}
+          initial={{ scale: 0.8 }}
           animate={{ scale: 1 }}
           transition={{ type: "spring", stiffness: 200 }}
-          className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center"
         >
-          <Mail className="w-8 h-8 text-primary" />
+          <PocketPayLogo size="default" />
         </motion.div>
 
         <div className="text-center space-y-2">
@@ -590,7 +589,7 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
                 <InputOTPSlot 
                   key={index}
                   index={index} 
-                  className="w-12 h-14 text-xl rounded-xl border-2 border-muted bg-muted/30 first:rounded-l-xl last:rounded-r-xl" 
+                  className="w-12 h-14 text-xl rounded-xl border-2 border-border bg-muted/30 first:rounded-l-xl last:rounded-r-xl focus:border-primary" 
                 />
               ))}
             </InputOTPGroup>
@@ -650,19 +649,20 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
       </button>
 
       <div className="flex-1 flex flex-col justify-center space-y-6">
-        <div className="text-center space-y-2">
+        <div className="text-center space-y-4">
           <motion.div
-            initial={{ scale: 0 }}
+            initial={{ scale: 0.8 }}
             animate={{ scale: 1 }}
             transition={{ type: "spring" }}
-            className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4"
           >
-            <Lock className="w-6 h-6 text-foreground" />
+            <PocketPayLogo size="default" />
           </motion.div>
-          <h2 className="text-xl font-semibold">Enter password</h2>
-          <p className="text-muted-foreground text-sm">
-            {method === 'email' ? email : `+1 ${phone}`}
-          </p>
+          <div>
+            <h2 className="text-xl font-semibold">Enter your password</h2>
+            <p className="text-muted-foreground text-sm mt-1">
+              {method === 'email' ? email : `+1 ${phone}`}
+            </p>
+          </div>
         </div>
 
         <div className="space-y-4">
@@ -672,7 +672,7 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
             placeholder="••••••••"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="h-12 rounded-xl bg-muted/50 border-0 focus:ring-2 focus:ring-primary/50 text-center text-lg tracking-widest"
+            className="h-12 rounded-xl bg-muted/50 border-border focus:border-primary focus:ring-1 focus:ring-primary text-center text-lg tracking-widest"
             required
           />
 
@@ -718,43 +718,8 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
 
   return (
     <div className="screen-container flex flex-col min-h-screen overflow-hidden">
-      {/* Decorative background for signup */}
-      {mode === 'signup' && (
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-32 -right-32 w-64 h-64 rounded-full bg-primary/5 blur-3xl" />
-          <div className="absolute -bottom-32 -left-32 w-64 h-64 rounded-full bg-accent/5 blur-3xl" />
-        </div>
-      )}
-
-      {/* Header - Compact for login, prominent for signup */}
-      <motion.div 
-        layout
-        className={`safe-top text-center relative z-10 ${mode === 'signup' ? 'pt-8 pb-6' : 'pt-6 pb-4'}`}
-      >
-        <AnimatePresence mode="wait">
-          {step === 'choose' && (
-            <motion.div
-              key={mode}
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }}
-              className="flex items-center justify-center gap-3"
-            >
-              <div className={`rounded-2xl flex items-center justify-center ${
-                mode === 'signup' 
-                  ? 'w-12 h-12 bg-gradient-to-br from-primary to-primary/70 shadow-lg shadow-primary/20' 
-                  : 'w-10 h-10 bg-muted'
-              }`}>
-                <Wallet className={`text-primary-foreground ${mode === 'signup' ? 'w-6 h-6' : 'w-5 h-5'}`} />
-              </div>
-              <h1 className={`font-bold ${mode === 'signup' ? 'text-2xl' : 'text-xl'}`}>Pocket Pay</h1>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
-
-      {/* Dynamic content based on step */}
-      <div className="flex-1 relative z-10 px-1">
+      {/* Content */}
+      <div className="flex-1 flex flex-col pt-12">
         <AnimatePresence mode="wait">
           {step === 'choose' && renderChooseMethod()}
           {step === 'details' && renderDetailsForm()}
@@ -766,7 +731,7 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
       {/* Toggle mode */}
       <motion.div 
         layout
-        className="py-6 text-center relative z-10"
+        className="py-6 text-center"
       >
         <button
           type="button"
