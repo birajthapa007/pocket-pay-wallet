@@ -99,4 +99,5 @@ export type Screen =
   | 'cards'
   | 'card-details'
   | 'contact-profile'
-  | 'transaction-detail';
+  | 'transaction-detail'
+  | 'scan';
