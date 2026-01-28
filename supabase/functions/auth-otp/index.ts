@@ -275,34 +275,11 @@ serve(async (req: Request): Promise<Response> => {
       const metadata = otpData.metadata as { name?: string; username?: string } || {};
 
       if (authAction === "signup") {
-        // Create user if doesn't exist
+        // Check if user exists
         const { data: existingUsers } = await supabase.auth.admin.listUsers();
         const existingUser = existingUsers?.users?.find(u => u.email === email.toLowerCase());
 
-        if (existingUser) {
-          // User exists, generate a session
-          const { data: sessionData, error: sessionError } = await supabase.auth.admin.generateLink({
-            type: "magiclink",
-            email: email.toLowerCase(),
-          });
-
-          if (sessionError) {
-            console.error("Session generation error:", sessionError);
-            return new Response(
-              JSON.stringify({ error: "Failed to create session" }),
-              { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
-
-          return new Response(
-            JSON.stringify({ 
-              success: true,
-              redirect_url: sessionData.properties?.action_link,
-              message: "Verification successful",
-            }),
-            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        } else {
+        if (!existingUser) {
           // Create new user
           const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
             email: email.toLowerCase(),
@@ -321,50 +298,42 @@ serve(async (req: Request): Promise<Response> => {
             );
           }
 
-          // Generate session for new user
-          const { data: sessionData, error: sessionError } = await supabase.auth.admin.generateLink({
-            type: "magiclink",
-            email: email.toLowerCase(),
-          });
-
-          if (sessionError) {
-            console.error("Session generation error:", sessionError);
-          }
-
-          return new Response(
-            JSON.stringify({ 
-              success: true,
-              user_id: newUser.user?.id,
-              redirect_url: sessionData?.properties?.action_link,
-              message: "Account created successfully",
-            }),
-            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+          console.log("Created new user:", newUser.user?.id);
         }
-      } else {
-        // Login - generate magic link
-        const { data: sessionData, error: sessionError } = await supabase.auth.admin.generateLink({
-          type: "magiclink",
-          email: email.toLowerCase(),
-        });
+      }
 
-        if (sessionError) {
-          console.error("Session generation error:", sessionError);
-          return new Response(
-            JSON.stringify({ error: "Failed to create session" }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
+      // Generate a magic link token for the user to sign in
+      const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+        type: "magiclink",
+        email: email.toLowerCase(),
+      });
 
+      if (linkError || !linkData) {
+        console.error("Link generation error:", linkError);
         return new Response(
-          JSON.stringify({ 
-            success: true,
-            redirect_url: sessionData.properties?.action_link,
-            message: "Login successful",
-          }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "Failed to create login session" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+
+      // Extract token_hash from the action_link
+      const actionLink = linkData.properties?.action_link || "";
+      const urlObj = new URL(actionLink);
+      const tokenHash = urlObj.searchParams.get("token_hash") || urlObj.hash?.split("access_token=")[1]?.split("&")[0];
+
+      console.log("Generated token for:", email.toLowerCase());
+
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          verified: true,
+          token_hash: tokenHash,
+          type: "magiclink",
+          email: email.toLowerCase(),
+          message: authAction === "signup" ? "Account created successfully" : "Login successful",
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
 
     } else {
       return new Response(
