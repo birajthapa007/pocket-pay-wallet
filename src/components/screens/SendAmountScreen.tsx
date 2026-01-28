@@ -1,18 +1,19 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Delete } from 'lucide-react';
+import { ArrowLeft, Delete, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { User } from '@/types/wallet';
 import { walletBalance } from '@/data/mockData';
 
 interface SendAmountScreenProps {
   recipient: User;
-  onSetAmount: (amount: number) => void;
+  onSetAmount: (amount: number, note: string) => void;
   onBack: () => void;
 }
 
 const SendAmountScreen = React.forwardRef<HTMLDivElement, SendAmountScreenProps>(
   ({ recipient, onSetAmount, onBack }, ref) => {
     const [amount, setAmount] = useState('0');
+    const [note, setNote] = useState('');
 
     const handleKeyPress = (key: string) => {
       if (key === 'delete') {
@@ -30,8 +31,8 @@ const SendAmountScreen = React.forwardRef<HTMLDivElement, SendAmountScreenProps>
 
     const handleContinue = () => {
       const numAmount = parseFloat(amount);
-      if (numAmount > 0) {
-        onSetAmount(numAmount);
+      if (numAmount > 0 && note.trim()) {
+        onSetAmount(numAmount, note.trim());
       }
     };
 
@@ -41,13 +42,14 @@ const SendAmountScreen = React.forwardRef<HTMLDivElement, SendAmountScreenProps>
 
     const numAmount = parseFloat(amount) || 0;
     const isOverBalance = numAmount > walletBalance.available;
+    const isValid = numAmount > 0 && !isOverBalance && note.trim().length > 0;
 
     const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'delete'];
 
     return (
       <div ref={ref} className="screen-container flex flex-col animate-fade-in min-h-screen safe-top">
         {/* Header */}
-        <div className="flex items-center gap-4 mb-8">
+        <div className="flex items-center gap-4 mb-6">
           <button
             onClick={onBack}
             className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center hover:bg-muted transition-colors active:scale-95"
@@ -66,11 +68,11 @@ const SendAmountScreen = React.forwardRef<HTMLDivElement, SendAmountScreenProps>
         </div>
 
         {/* Amount Display */}
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
+        <div className="flex-1 flex flex-col items-center justify-center">
+          <div className="text-center mb-4">
             <div className="flex items-baseline justify-center gap-1">
-              <span className="text-2xl sm:text-3xl font-bold text-muted-foreground">$</span>
-              <span className={`text-5xl sm:text-6xl font-bold tabular-nums ${isOverBalance ? 'text-destructive' : 'text-foreground'}`}>
+              <span className="text-2xl font-bold text-muted-foreground">$</span>
+              <span className={`text-5xl font-bold tabular-nums ${isOverBalance ? 'text-destructive' : 'text-foreground'}`}>
                 {parseFloat(amount).toLocaleString('en-US', {
                   minimumFractionDigits: 0,
                   maximumFractionDigits: 2,
@@ -81,10 +83,30 @@ const SendAmountScreen = React.forwardRef<HTMLDivElement, SendAmountScreenProps>
               <p className="text-sm text-destructive mt-2 animate-fade-in">Exceeds available balance</p>
             )}
           </div>
+
+          {/* Reason Input - Required */}
+          <div className="w-full max-w-xs">
+            <div className="relative">
+              <MessageSquare className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="What's this for? (required)"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                className="w-full pl-11 pr-4 py-3 bg-secondary/50 rounded-xl text-sm text-foreground placeholder:text-muted-foreground border border-border/50 focus:border-primary/50 focus:ring-1 focus:ring-primary/30 outline-none transition-all"
+                maxLength={50}
+              />
+            </div>
+            {note.length === 0 && numAmount > 0 && (
+              <p className="text-xs text-muted-foreground mt-2 text-center">
+                Please add a reason for this payment
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Keypad */}
-        <div className="grid grid-cols-3 gap-1 mb-6 max-w-xs mx-auto w-full">
+        <div className="grid grid-cols-3 gap-1 mb-4 max-w-xs mx-auto w-full">
           {keys.map((key) => (
             <button
               key={key}
@@ -92,7 +114,7 @@ const SendAmountScreen = React.forwardRef<HTMLDivElement, SendAmountScreenProps>
               className="keypad-button"
             >
               {key === 'delete' ? (
-                <Delete className="w-5 h-5 sm:w-6 sm:h-6" />
+                <Delete className="w-5 h-5" />
               ) : (
                 key
               )}
@@ -105,7 +127,7 @@ const SendAmountScreen = React.forwardRef<HTMLDivElement, SendAmountScreenProps>
           <Button
             size="full"
             onClick={handleContinue}
-            disabled={numAmount <= 0 || isOverBalance}
+            disabled={!isValid}
           >
             Continue
           </Button>
