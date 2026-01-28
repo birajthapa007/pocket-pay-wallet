@@ -26,9 +26,17 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [middleName, setMiddleName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [username, setUsername] = useState('');
   const [otp, setOtp] = useState('');
+  
+  // Helper to get full name
+  const getFullName = () => {
+    const parts = [firstName.trim(), middleName.trim(), lastName.trim()].filter(Boolean);
+    return parts.join(' ');
+  };
   
   // Reset form when mode changes
   useEffect(() => {
@@ -67,8 +75,13 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
 
     try {
       if (mode === 'signup') {
-        if (!name.trim()) {
-          setError('Name is required');
+        if (!firstName.trim()) {
+          setError('First name is required');
+          setIsLoading(false);
+          return;
+        }
+        if (!lastName.trim()) {
+          setError('Last name is required');
           setIsLoading(false);
           return;
         }
@@ -180,7 +193,7 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
           contact,
           type: method!,
           otp,
-          name: name.trim(),
+          name: getFullName(),
           username: username.toLowerCase().trim(),
         });
         
@@ -499,16 +512,43 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
             transition={{ delay: 0.1 }}
             className="space-y-4"
           >
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="firstName" className="text-sm font-medium">First Name</Label>
+                <Input
+                  id="firstName"
+                  type="text"
+                  placeholder="Alex"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  className="h-12 rounded-xl bg-muted/50 border-0 focus:ring-2 focus:ring-primary/50"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lastName" className="text-sm font-medium">Last Name</Label>
+                <Input
+                  id="lastName"
+                  type="text"
+                  placeholder="Johnson"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  className="h-12 rounded-xl bg-muted/50 border-0 focus:ring-2 focus:ring-primary/50"
+                  required
+                />
+              </div>
+            </div>
             <div className="space-y-2">
-              <Label htmlFor="name" className="text-sm font-medium">Full Name</Label>
+              <Label htmlFor="middleName" className="text-sm font-medium">
+                Middle Name <span className="text-muted-foreground font-normal">(optional)</span>
+              </Label>
               <Input
-                id="name"
+                id="middleName"
                 type="text"
-                placeholder="Alex Johnson"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                placeholder="Michael"
+                value={middleName}
+                onChange={(e) => setMiddleName(e.target.value)}
                 className="h-12 rounded-xl bg-muted/50 border-0 focus:ring-2 focus:ring-primary/50"
-                required
               />
             </div>
             <div className="space-y-2">
