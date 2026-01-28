@@ -14,16 +14,315 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      cards: {
+        Row: {
+          card_number_encrypted: string
+          cardholder_name: string
+          created_at: string
+          cvv_encrypted: string
+          expiry_date: string
+          id: string
+          is_active: boolean
+          is_frozen: boolean
+          last_four: string
+          type: Database["public"]["Enums"]["card_type"]
+          wallet_id: string
+        }
+        Insert: {
+          card_number_encrypted: string
+          cardholder_name: string
+          created_at?: string
+          cvv_encrypted: string
+          expiry_date: string
+          id?: string
+          is_active?: boolean
+          is_frozen?: boolean
+          last_four: string
+          type: Database["public"]["Enums"]["card_type"]
+          wallet_id: string
+        }
+        Update: {
+          card_number_encrypted?: string
+          cardholder_name?: string
+          created_at?: string
+          cvv_encrypted?: string
+          expiry_date?: string
+          id?: string
+          is_active?: boolean
+          is_frozen?: boolean
+          last_four?: string
+          type?: Database["public"]["Enums"]["card_type"]
+          wallet_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cards_wallet_id_fkey"
+            columns: ["wallet_id"]
+            isOneToOne: false
+            referencedRelation: "wallets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ledger_entries: {
+        Row: {
+          amount: number
+          created_at: string
+          description: string | null
+          id: string
+          reference_transaction_id: string | null
+          wallet_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          reference_transaction_id?: string | null
+          wallet_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          reference_transaction_id?: string | null
+          wallet_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ledger_entries_wallet_id_fkey"
+            columns: ["wallet_id"]
+            isOneToOne: false
+            referencedRelation: "wallets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_requests: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          note: string | null
+          requested_from_wallet_id: string
+          requester_wallet_id: string
+          status: Database["public"]["Enums"]["request_status"]
+          transaction_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          note?: string | null
+          requested_from_wallet_id: string
+          requester_wallet_id: string
+          status?: Database["public"]["Enums"]["request_status"]
+          transaction_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          note?: string | null
+          requested_from_wallet_id?: string
+          requester_wallet_id?: string
+          status?: Database["public"]["Enums"]["request_status"]
+          transaction_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_requests_requested_from_wallet_id_fkey"
+            columns: ["requested_from_wallet_id"]
+            isOneToOne: false
+            referencedRelation: "wallets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_requests_requester_wallet_id_fkey"
+            columns: ["requester_wallet_id"]
+            isOneToOne: false
+            referencedRelation: "wallets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_requests_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          phone: string | null
+          updated_at: string
+          username: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          id: string
+          name: string
+          phone?: string | null
+          updated_at?: string
+          username: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          phone?: string | null
+          updated_at?: string
+          username?: string
+        }
+        Relationships: []
+      }
+      risk_settings: {
+        Row: {
+          description: string | null
+          id: string
+          setting_key: string
+          setting_value: number
+          updated_at: string
+        }
+        Insert: {
+          description?: string | null
+          id?: string
+          setting_key: string
+          setting_value: number
+          updated_at?: string
+        }
+        Update: {
+          description?: string | null
+          id?: string
+          setting_key?: string
+          setting_value?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      transactions: {
+        Row: {
+          amount: number
+          created_at: string
+          description: string
+          id: string
+          is_risky: boolean
+          recipient_wallet_id: string | null
+          risk_reason: string | null
+          sender_wallet_id: string | null
+          status: Database["public"]["Enums"]["transaction_status"]
+          type: Database["public"]["Enums"]["transaction_type"]
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          description: string
+          id?: string
+          is_risky?: boolean
+          recipient_wallet_id?: string | null
+          risk_reason?: string | null
+          sender_wallet_id?: string | null
+          status?: Database["public"]["Enums"]["transaction_status"]
+          type: Database["public"]["Enums"]["transaction_type"]
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          description?: string
+          id?: string
+          is_risky?: boolean
+          recipient_wallet_id?: string | null
+          risk_reason?: string | null
+          sender_wallet_id?: string | null
+          status?: Database["public"]["Enums"]["transaction_status"]
+          type?: Database["public"]["Enums"]["transaction_type"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_recipient_wallet_id_fkey"
+            columns: ["recipient_wallet_id"]
+            isOneToOne: false
+            referencedRelation: "wallets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_sender_wallet_id_fkey"
+            columns: ["sender_wallet_id"]
+            isOneToOne: false
+            referencedRelation: "wallets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wallets: {
+        Row: {
+          created_at: string
+          currency: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          currency?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_pending_balance: { Args: { p_wallet_id: string }; Returns: number }
+      get_user_wallet_id: { Args: { p_user_id: string }; Returns: string }
+      get_wallet_balance: { Args: { p_wallet_id: string }; Returns: number }
+      is_wallet_owner: {
+        Args: { p_user_id: string; p_wallet_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      card_type: "virtual" | "physical"
+      request_status: "pending" | "accepted" | "declined" | "cancelled"
+      transaction_status:
+        | "created"
+        | "pending_confirmation"
+        | "completed"
+        | "blocked"
+        | "failed"
+      transaction_type:
+        | "send"
+        | "receive"
+        | "deposit"
+        | "withdrawal"
+        | "request"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +449,17 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      card_type: ["virtual", "physical"],
+      request_status: ["pending", "accepted", "declined", "cancelled"],
+      transaction_status: [
+        "created",
+        "pending_confirmation",
+        "completed",
+        "blocked",
+        "failed",
+      ],
+      transaction_type: ["send", "receive", "deposit", "withdrawal", "request"],
+    },
   },
 } as const
