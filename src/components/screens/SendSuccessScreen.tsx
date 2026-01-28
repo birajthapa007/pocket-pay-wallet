@@ -1,8 +1,9 @@
 import React from 'react';
-import { Check, ShieldCheck, Clock, ShieldAlert } from 'lucide-react';
+import { Check, ShieldCheck, Clock, ShieldAlert, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { User, Transaction } from '@/types/wallet';
 import { formatCurrency } from '@/data/mockData';
+import { useConfirmTransfer, useCancelTransfer } from '@/hooks/useWallet';
 
 interface SendSuccessScreenProps {
   recipient: User;
@@ -14,12 +15,30 @@ interface SendSuccessScreenProps {
 
 const SendSuccessScreen = React.forwardRef<HTMLDivElement, SendSuccessScreenProps>(
   ({ recipient, amount, note, transaction, onDone }, ref) => {
+    const confirmTransfer = useConfirmTransfer();
+    const cancelTransfer = useCancelTransfer();
+
     const getInitials = (name: string) => {
       return name.split(' ').map((n) => n[0]).join('').toUpperCase();
     };
 
     const status = transaction?.status || 'completed';
     const isRisky = transaction?.isRisky || false;
+    const isPending = status === 'pending';
+
+    const handleConfirm = async () => {
+      if (transaction?.id) {
+        await confirmTransfer.mutateAsync(transaction.id);
+        onDone();
+      }
+    };
+
+    const handleCancel = async () => {
+      if (transaction?.id) {
+        await cancelTransfer.mutateAsync(transaction.id);
+        onDone();
+      }
+    };
 
     return (
       <div ref={ref} className="screen-container flex flex-col items-center justify-center min-h-screen animate-fade-in safe-top">
@@ -35,7 +54,7 @@ const SendSuccessScreen = React.forwardRef<HTMLDivElement, SendSuccessScreenProp
           )}
           {status === 'pending' && (
             <div className="w-24 h-24 rounded-full bg-warning flex items-center justify-center shadow-lg">
-              <Clock className="w-12 h-12 text-warning-foreground" strokeWidth={2} />
+              <AlertTriangle className="w-12 h-12 text-warning-foreground" strokeWidth={2} />
             </div>
           )}
           {status === 'blocked' && (
@@ -47,15 +66,30 @@ const SendSuccessScreen = React.forwardRef<HTMLDivElement, SendSuccessScreenProp
 
         {/* Message */}
         <h1 className="text-3xl font-bold text-foreground mb-2">
-          {status === 'completed' ? 'Sent!' : status === 'pending' ? 'Processing' : 'Blocked'}
+          {status === 'completed' ? 'Sent!' : status === 'pending' ? 'Review Required' : 'Blocked'}
         </h1>
-        <p className="text-muted-foreground text-center mb-8">
+        <p className="text-muted-foreground text-center mb-4 px-6">
           {status === 'completed' 
             ? 'Your payment was successful' 
             : status === 'pending'
-            ? 'Your payment is being verified'
+            ? 'This transfer needs your confirmation'
             : 'This transfer was blocked for your protection'}
         </p>
+
+        {/* Risk reason for pending */}
+        {isPending && isRisky && (
+          <div className="bg-warning-soft border border-warning/30 rounded-xl px-4 py-3 mb-6 mx-6 max-w-xs">
+            <div className="flex items-start gap-2">
+              <ShieldCheck className="w-5 h-5 text-warning mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-warning">Security Check</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  This is your first transfer to this recipient. Please confirm you want to proceed.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Details */}
         <div className="w-full max-w-xs bg-card rounded-2xl p-5 border border-border/50 mb-6">
@@ -95,16 +129,36 @@ const SendSuccessScreen = React.forwardRef<HTMLDivElement, SendSuccessScreenProp
             {status === 'completed' 
               ? 'Secure transaction complete' 
               : status === 'pending'
-              ? 'Pending security verification'
+              ? 'Awaiting your confirmation'
               : 'Transfer blocked for safety'}
           </span>
         </div>
 
-        {/* Done Button */}
-        <div className="w-full max-w-xs safe-bottom pb-4">
-          <Button size="full" onClick={onDone}>
-            Done
-          </Button>
+        {/* Buttons */}
+        <div className="w-full max-w-xs safe-bottom pb-4 space-y-3">
+          {isPending ? (
+            <>
+              <Button 
+                size="full" 
+                onClick={handleConfirm}
+                disabled={confirmTransfer.isPending}
+              >
+                {confirmTransfer.isPending ? 'Confirming...' : 'Confirm & Send'}
+              </Button>
+              <Button 
+                size="full" 
+                variant="outline" 
+                onClick={handleCancel}
+                disabled={cancelTransfer.isPending}
+              >
+                {cancelTransfer.isPending ? 'Cancelling...' : 'Cancel Transfer'}
+              </Button>
+            </>
+          ) : (
+            <Button size="full" onClick={onDone}>
+              Done
+            </Button>
+          )}
         </div>
       </div>
     );

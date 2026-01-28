@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { User } from '@/types/wallet';
 
@@ -10,6 +11,7 @@ export interface AuthState {
 }
 
 export function useAuth() {
+  const queryClient = useQueryClient();
   const [state, setState] = useState<AuthState>({
     isLoggedIn: false,
     isLoading: true,
@@ -20,6 +22,11 @@ export function useAuth() {
   useEffect(() => {
     // Set up auth state listener BEFORE checking session
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // Clear all cached data on any auth change to ensure fresh data for new user
+      if (event === 'SIGNED_OUT' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        queryClient.clear();
+      }
+
       if (session?.user) {
         setState({
           isLoggedIn: true,
@@ -62,11 +69,13 @@ export function useAuth() {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [queryClient]);
 
   const signOut = useCallback(async () => {
+    // Clear all queries before signing out
+    queryClient.clear();
     await supabase.auth.signOut();
-  }, []);
+  }, [queryClient]);
 
   const updateUser = useCallback((updates: Partial<User>) => {
     setState(prev => ({
