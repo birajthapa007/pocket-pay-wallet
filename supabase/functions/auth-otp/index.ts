@@ -149,7 +149,7 @@ serve(async (req: Request): Promise<Response> => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: "Pocket Pay <onboarding@resend.dev>",
+          from: "Pocket Pay <noreply@wenevertrust.com>",
           to: [email],
           subject,
           html: `
