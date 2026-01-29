@@ -361,7 +361,7 @@ export const cardsApi = {
 
 export const authApi = {
   // Send OTP to email using custom edge function (shows code in email)
-  async sendOtpEmail(email: string, action: 'signup' | 'login' | 'recovery' = 'login', metadata?: { name?: string; username?: string }): Promise<{ error: string | null; testCode?: string }> {
+  async sendOtpEmail(email: string, action: 'signup' | 'login' | 'recovery' = 'login', metadata?: { name?: string; username?: string; password?: string }): Promise<{ error: string | null; testCode?: string }> {
     try {
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/auth-otp?action=send`;
       
@@ -376,6 +376,7 @@ export const authApi = {
           action,
           name: metadata?.name,
           username: metadata?.username,
+          password: metadata?.password,
         }),
       });
 

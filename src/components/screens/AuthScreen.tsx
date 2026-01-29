@@ -26,6 +26,7 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -95,6 +96,21 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
           setIsLoading(false);
           return;
         }
+        if (!password) {
+          setError('Password is required');
+          setIsLoading(false);
+          return;
+        }
+        if (password.length < 6) {
+          setError('Password must be at least 6 characters');
+          setIsLoading(false);
+          return;
+        }
+        if (password !== confirmPassword) {
+          setError('Passwords do not match');
+          setIsLoading(false);
+          return;
+        }
       }
 
       if (method === 'email') {
@@ -107,7 +123,7 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
         const { error: otpError, testCode } = await authApi.sendOtpEmail(
           email,
           mode === 'signup' ? 'signup' : 'login',
-          mode === 'signup' ? { name: getFullName(), username: username.toLowerCase().trim() } : undefined
+          mode === 'signup' ? { name: getFullName(), username: username.toLowerCase().trim(), password } : undefined
         );
         if (otpError) {
           setError(otpError);
@@ -578,6 +594,37 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
                 Friends will find you as @{username || 'username'}
               </p>
             </div>
+            
+            {/* Password fields */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="signupPassword" className="text-sm font-medium">Password</Label>
+                <Input
+                  id="signupPassword"
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="h-12 rounded-xl bg-muted/50 border-0 focus:ring-2 focus:ring-primary/50"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword" className="text-sm font-medium">Confirm</Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="h-12 rounded-xl bg-muted/50 border-0 focus:ring-2 focus:ring-primary/50"
+                  required
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground pl-1">
+              You can use this password to log in if you have OTP issues
+            </p>
           </motion.div>
         )}
 
