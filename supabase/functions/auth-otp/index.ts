@@ -18,6 +18,7 @@ interface SendOtpRequest {
   action: 'signup' | 'login' | 'recovery';
   name?: string;
   username?: string;
+  password?: string;
 }
 
 interface VerifyOtpRequest {
@@ -65,7 +66,7 @@ serve(async (req: Request): Promise<Response> => {
     if (action === "send") {
       // SEND OTP
       const body: SendOtpRequest = await req.json();
-      const { email, action: authAction, name, username } = body;
+      const { email, action: authAction, name, username, password } = body;
 
       if (!email || !email.includes("@")) {
         return new Response(
@@ -92,7 +93,7 @@ serve(async (req: Request): Promise<Response> => {
           email: email.toLowerCase(),
           code,
           action: authAction,
-          metadata: { name, username },
+          metadata: { name, username, password },
           expires_at: expiresAt.toISOString(),
           attempts: 0,
           locked_until: null,
@@ -309,7 +310,7 @@ serve(async (req: Request): Promise<Response> => {
         .eq("id", otpRecord.id);
 
       // Get metadata from OTP record
-      const metadata = otpRecord.metadata as { name?: string; username?: string } || {};
+      const metadata = otpRecord.metadata as { name?: string; username?: string; password?: string } || {};
       const normalizedEmail = email.toLowerCase();
 
       // Check if user exists
@@ -317,15 +318,27 @@ serve(async (req: Request): Promise<Response> => {
       let existingUser = existingUsers?.users?.find(u => u.email?.toLowerCase() === normalizedEmail);
 
       if (authAction === "signup" && !existingUser) {
-        // Create new user
-        const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
+        // Create new user with password if provided
+        const createUserPayload: {
+          email: string;
+          email_confirm: boolean;
+          password?: string;
+          user_metadata: { name?: string; username?: string };
+        } = {
           email: normalizedEmail,
           email_confirm: true,
           user_metadata: {
             name: metadata.name,
             username: metadata.username,
           },
-        });
+        };
+        
+        // Add password if provided
+        if (metadata.password && metadata.password.length >= 6) {
+          createUserPayload.password = metadata.password;
+        }
+
+        const { data: newUser, error: createError } = await supabase.auth.admin.createUser(createUserPayload);
 
         if (createError) {
           console.error("User creation error:", createError);
