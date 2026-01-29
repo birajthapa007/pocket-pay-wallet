@@ -83,7 +83,7 @@ serve(async (req: Request): Promise<Response> => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "Pocket Pay <noreply@lovable.app>",
+        from: "Pocket Pay <noreply@pocket-pay.com>",
         to: [email],
         subject,
         html: `
