@@ -160,33 +160,39 @@ export type Database = {
       otp_codes: {
         Row: {
           action: string
+          attempts: number | null
           code: string
           created_at: string
           email: string
           expires_at: string
           id: string
+          locked_until: string | null
           metadata: Json | null
           phone: string | null
           verified_at: string | null
         }
         Insert: {
           action?: string
+          attempts?: number | null
           code: string
           created_at?: string
           email: string
           expires_at: string
           id?: string
+          locked_until?: string | null
           metadata?: Json | null
           phone?: string | null
           verified_at?: string | null
         }
         Update: {
           action?: string
+          attempts?: number | null
           code?: string
           created_at?: string
           email?: string
           expires_at?: string
           id?: string
+          locked_until?: string | null
           metadata?: Json | null
           phone?: string | null
           verified_at?: string | null
