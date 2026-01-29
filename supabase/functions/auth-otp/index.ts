@@ -2,7 +2,7 @@
 // POCKET PAY - Custom OTP Authentication
 // Generates OTP, stores it, and sends email with code
 // NO magic links - OTP code only
-// With rate limiting and brute force protection
+// Forgiving verification - no lockouts
 // =========================================
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
@@ -26,10 +26,8 @@ interface VerifyOtpRequest {
   action: 'signup' | 'login' | 'recovery';
 }
 
-// Constants for rate limiting
-const MAX_ATTEMPTS = 5;
-const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
-const OTP_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
+// OTP expires after 30 minutes (generous window)
+const OTP_EXPIRY_MS = 30 * 60 * 1000;
 
 // Generate a 6-digit OTP
 function generateOtp(): string {
@@ -167,7 +165,7 @@ serve(async (req: Request): Promise<Response> => {
               <div style="background: #21262d; border-radius: 16px; padding: 32px; text-align: center; border: 1px solid #30363d;">
                 <p style="margin: 0 0 12px; color: #8b949e; font-size: 14px; text-transform: uppercase; letter-spacing: 2px;">Your verification code</p>
                 <p style="margin: 0; color: #2dd4bf; font-size: 42px; font-weight: 800; letter-spacing: 12px; font-family: 'Courier New', monospace;">${code}</p>
-                <p style="margin: 16px 0 0; color: #6e7681; font-size: 13px;">This code expires in 15 minutes</p>
+                <p style="margin: 16px 0 0; color: #6e7681; font-size: 13px;">This code expires in 30 minutes</p>
               </div>
             </td>
           </tr>
@@ -281,53 +279,24 @@ serve(async (req: Request): Promise<Response> => {
         );
       }
 
-      // Check if account is locked
-      if (otpRecord.locked_until && new Date(otpRecord.locked_until) > new Date()) {
-        const remainingMinutes = Math.ceil((new Date(otpRecord.locked_until).getTime() - Date.now()) / 60000);
-        return new Response(
-          JSON.stringify({ 
-            error: `Too many failed attempts. Please try again in ${remainingMinutes} minute${remainingMinutes === 1 ? '' : 's'}.` 
-          }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+      // Check if account is locked (legacy - now we just clear it)
+      if (otpRecord.locked_until) {
+        // Clear any old locks
+        await supabase
+          .from("otp_codes")
+          .update({ locked_until: null, attempts: 0 })
+          .eq("id", otpRecord.id);
       }
 
       // Check if code matches
       if (otpRecord.code !== code) {
-        const currentAttempts = (otpRecord.attempts || 0) + 1;
-        const remainingAttempts = MAX_ATTEMPTS - currentAttempts;
-
-        // Update attempt count
-        if (currentAttempts >= MAX_ATTEMPTS) {
-          // Lock the account
-          await supabase
-            .from("otp_codes")
-            .update({ 
-              attempts: currentAttempts,
-              locked_until: new Date(Date.now() + LOCKOUT_DURATION_MS).toISOString()
-            })
-            .eq("id", otpRecord.id);
-
-          return new Response(
-            JSON.stringify({ 
-              error: "Too many failed attempts. Account locked for 15 minutes." 
-            }),
-            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-
-        // Increment attempts
-        await supabase
-          .from("otp_codes")
-          .update({ attempts: currentAttempts })
-          .eq("id", otpRecord.id);
-
-        // Add small delay to slow down brute force
-        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * currentAttempts, 5000)));
+        // Just inform the user, no lockout
+        // Add tiny delay to slow down automated attacks (1 second max)
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
         return new Response(
           JSON.stringify({ 
-            error: `Invalid code. ${remainingAttempts} attempt${remainingAttempts === 1 ? '' : 's'} remaining.` 
+            error: "Invalid code. Please check and try again, or request a new code." 
           }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
