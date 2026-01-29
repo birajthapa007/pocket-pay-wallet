@@ -1,6 +1,7 @@
 // =========================================
 // POCKET PAY - Custom OTP Authentication
-// Generates OTP, stores it, and sends email with code + magic link
+// Generates OTP, stores it, and sends email with code
+// NO magic links - OTP code only
 // With rate limiting and brute force protection
 // =========================================
 
@@ -28,7 +29,7 @@ interface VerifyOtpRequest {
 // Constants for rate limiting
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
-const OTP_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes (reduced from 1 hour)
+const OTP_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 
 // Generate a 6-digit OTP
 function generateOtp(): string {
@@ -109,21 +110,7 @@ serve(async (req: Request): Promise<Response> => {
         );
       }
 
-      // Also trigger Supabase's magic link (for the link option)
-      const { error: otpError } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          shouldCreateUser: authAction === "signup",
-          data: authAction === "signup" ? { name, username } : undefined,
-        },
-      });
-
-      if (otpError) {
-        console.error("Supabase OTP error:", otpError);
-        // Don't fail - we still have our custom code
-      }
-
-      // Send email via Resend with the code
+      // Send email via Resend with the code ONLY (no magic link)
       const subject = authAction === "signup" 
         ? "Welcome to Pocket Pay - Your Verification Code"
         : authAction === "recovery"
@@ -289,7 +276,7 @@ serve(async (req: Request): Promise<Response> => {
 
       if (!otpRecord) {
         return new Response(
-          JSON.stringify({ error: "Invalid or expired verification code" }),
+          JSON.stringify({ error: "Invalid or expired verification code. Please request a new code." }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -352,63 +339,86 @@ serve(async (req: Request): Promise<Response> => {
         .update({ verified_at: new Date().toISOString() })
         .eq("id", otpRecord.id);
 
-      // Now sign in the user using Supabase Admin API
+      // Get metadata from OTP record
       const metadata = otpRecord.metadata as { name?: string; username?: string } || {};
+      const normalizedEmail = email.toLowerCase();
 
-      if (authAction === "signup") {
-        // Check if user exists
-        const { data: existingUsers } = await supabase.auth.admin.listUsers();
-        const existingUser = existingUsers?.users?.find(u => u.email === email.toLowerCase());
+      // Check if user exists
+      const { data: existingUsers } = await supabase.auth.admin.listUsers();
+      let existingUser = existingUsers?.users?.find(u => u.email?.toLowerCase() === normalizedEmail);
 
-        if (!existingUser) {
-          // Create new user
-          const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
-            email: email.toLowerCase(),
-            email_confirm: true,
-            user_metadata: {
-              name: metadata.name,
-              username: metadata.username,
-            },
-          });
+      if (authAction === "signup" && !existingUser) {
+        // Create new user
+        const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
+          email: normalizedEmail,
+          email_confirm: true,
+          user_metadata: {
+            name: metadata.name,
+            username: metadata.username,
+          },
+        });
 
-          if (createError) {
-            console.error("User creation error:", createError);
-            return new Response(
-              JSON.stringify({ error: "Failed to create account" }),
-              { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
-
-          console.log("Created new user:", newUser.user?.id);
+        if (createError) {
+          console.error("User creation error:", createError);
+          return new Response(
+            JSON.stringify({ error: "Failed to create account. Please try again." }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
         }
+
+        existingUser = newUser.user;
+        console.log("Created new user:", existingUser?.id);
       }
 
-      // Generate a magic link and get the hashed_token for session creation
+      if (!existingUser) {
+        return new Response(
+          JSON.stringify({ error: "No account found with this email. Please sign up first." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Generate a proper session using admin API
+      // We need to generate a magic link and extract the token
       const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
         type: "magiclink",
-        email: email.toLowerCase(),
+        email: normalizedEmail,
       });
 
-      if (linkError || !linkData?.properties?.hashed_token) {
+      if (linkError || !linkData) {
         console.error("Link generation error:", linkError);
         return new Response(
-          JSON.stringify({ error: "Failed to create login session" }),
+          JSON.stringify({ error: "Failed to create login session. Please try again." }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      // Get the hashed_token which can be used with verifyOtp
-      const hashedToken = linkData.properties.hashed_token;
-      
-      console.log("Generated hashed_token for:", email.toLowerCase());
+      // Extract the token from the action_link
+      const actionLink = linkData.properties?.action_link;
+      if (!actionLink) {
+        console.error("No action link generated");
+        return new Response(
+          JSON.stringify({ error: "Failed to create login session. Please try again." }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Parse the token from the URL
+      const linkUrl = new URL(actionLink);
+      const tokenHash = linkUrl.searchParams.get('token_hash') || linkData.properties?.hashed_token;
+      const accessToken = linkUrl.hash?.match(/access_token=([^&]+)/)?.[1];
+      const refreshToken = linkUrl.hash?.match(/refresh_token=([^&]+)/)?.[1];
+
+      console.log("Generated session for:", normalizedEmail);
 
       return new Response(
         JSON.stringify({ 
           success: true,
           verified: true,
-          token_hash: hashedToken,
+          // Return the token_hash for client-side session creation
+          token_hash: tokenHash,
           type: "magiclink",
-          email: email.toLowerCase(),
+          email: normalizedEmail,
+          user_id: existingUser.id,
           message: authAction === "signup" ? "Account created successfully" : "Login successful",
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -423,7 +433,6 @@ serve(async (req: Request): Promise<Response> => {
 
   } catch (error: unknown) {
     console.error("Error in auth-otp function:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return new Response(
       JSON.stringify({ error: "An error occurred. Please try again." }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

@@ -545,32 +545,90 @@ export const authApi = {
     }
   },
 
-  // Verify OTP for login
+  // Verify OTP for login - uses custom edge function
   async verifyOtpLogin(params: {
     contact: string;
     type: 'email' | 'phone';
     otp: string;
   }): Promise<{ user: UserProfile | null; error: string | null }> {
-    const verifyParams = params.type === 'email' 
-      ? { email: params.contact, token: params.otp, type: 'email' as const }
-      : { phone: params.contact, token: params.otp, type: 'sms' as const };
+    try {
+      // For phone, use Supabase's built-in SMS OTP
+      if (params.type === 'phone') {
+        const { data, error } = await supabase.auth.verifyOtp({
+          phone: params.contact,
+          token: params.otp,
+          type: 'sms',
+        });
 
-    const { data, error } = await supabase.auth.verifyOtp(verifyParams);
+        if (error) {
+          return { user: null, error: error.message };
+        }
 
-    if (error) {
-      return { user: null, error: error.message };
+        return {
+          user: data.user ? {
+            id: data.user.id,
+            name: data.user.user_metadata?.name || 'User',
+            username: data.user.user_metadata?.username || '',
+            email: data.user.email || undefined,
+            phone: data.user.phone || undefined,
+          } : null,
+          error: null,
+        };
+      }
+
+      // For email, use our custom OTP verification
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/auth-otp?action=verify`;
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({
+          email: params.contact.toLowerCase(),
+          code: params.otp,
+          action: 'login',
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        return { user: null, error: data.error || 'Verification failed' };
+      }
+
+      // If we got a token_hash, use it to create a session
+      if (data.token_hash) {
+        const { data: sessionData, error: sessionError } = await supabase.auth.verifyOtp({
+          token_hash: data.token_hash,
+          type: 'magiclink',
+        });
+        
+        if (sessionError) {
+          console.error('Session verification error:', sessionError);
+          return { user: null, error: 'Failed to complete login. Please try again.' };
+        }
+        
+        if (sessionData?.user) {
+          return {
+            user: {
+              id: sessionData.user.id,
+              name: sessionData.user.user_metadata?.name || 'User',
+              username: sessionData.user.user_metadata?.username || '',
+              email: sessionData.user.email || undefined,
+              phone: sessionData.user.phone || undefined,
+            },
+            error: null,
+          };
+        }
+      }
+
+      return { user: null, error: 'Verification failed. Please try again.' };
+    } catch (err) {
+      console.error('Verify OTP error:', err);
+      return { user: null, error: 'Verification failed' };
     }
-
-    return {
-      user: data.user ? {
-        id: data.user.id,
-        name: data.user.user_metadata?.name || 'User',
-        username: data.user.user_metadata?.username || '',
-        email: data.user.email || undefined,
-        phone: data.user.phone || undefined,
-      } : null,
-      error: null,
-    };
   },
 
   // Sign in with password (fallback for login)
