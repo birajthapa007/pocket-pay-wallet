@@ -1,6 +1,7 @@
 // =========================================
 // POCKET PAY - Custom OTP Authentication
 // Generates OTP, stores it, and sends email with code + magic link
+// With rate limiting and brute force protection
 // =========================================
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
@@ -23,6 +24,11 @@ interface VerifyOtpRequest {
   code: string;
   action: 'signup' | 'login' | 'recovery';
 }
+
+// Constants for rate limiting
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+const OTP_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes (reduced from 1 hour)
 
 // Generate a 6-digit OTP
 function generateOtp(): string {
@@ -71,7 +77,7 @@ serve(async (req: Request): Promise<Response> => {
 
       // Generate OTP code
       const code = generateOtp();
-      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+      const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS); // 15 minutes
 
       // Delete any existing unused codes for this email
       await supabase
@@ -80,8 +86,8 @@ serve(async (req: Request): Promise<Response> => {
         .eq("email", email.toLowerCase())
         .is("verified_at", null);
 
-      // Store the new code
-      const { error: insertError } = await supabase
+      // Store the new code with attempt tracking
+      const { data: insertedOtp, error: insertError } = await supabase
         .from("otp_codes")
         .insert({
           email: email.toLowerCase(),
@@ -89,7 +95,11 @@ serve(async (req: Request): Promise<Response> => {
           action: authAction,
           metadata: { name, username },
           expires_at: expiresAt.toISOString(),
-        });
+          attempts: 0,
+          locked_until: null,
+        })
+        .select('id')
+        .single();
 
       if (insertError) {
         console.error("Error storing OTP:", insertError);
@@ -170,7 +180,7 @@ serve(async (req: Request): Promise<Response> => {
               <div style="background: #21262d; border-radius: 16px; padding: 32px; text-align: center; border: 1px solid #30363d;">
                 <p style="margin: 0 0 12px; color: #8b949e; font-size: 14px; text-transform: uppercase; letter-spacing: 2px;">Your verification code</p>
                 <p style="margin: 0; color: #2dd4bf; font-size: 42px; font-weight: 800; letter-spacing: 12px; font-family: 'Courier New', monospace;">${code}</p>
-                <p style="margin: 16px 0 0; color: #6e7681; font-size: 13px;">This code expires in 1 hour</p>
+                <p style="margin: 16px 0 0; color: #6e7681; font-size: 13px;">This code expires in 15 minutes</p>
               </div>
             </td>
           </tr>
@@ -207,37 +217,39 @@ serve(async (req: Request): Promise<Response> => {
 
       const emailData = await emailResponse.json();
       
-      let emailSent = true;
-      let emailError: string | null = null;
-      
       if (!emailResponse.ok) {
-        emailSent = false;
-        emailError = emailData.message || "Failed to send email";
         console.error("Resend API error:", emailData);
-        // Don't fail - continue with Supabase's managed email as fallback
-        // The code is still stored in otp_codes table
-      } else {
-        console.log(`OTP email sent successfully to ${email}, action: ${authAction}`);
+        
+        // Delete the OTP code since we can't deliver it securely
+        if (insertedOtp?.id) {
+          await supabase
+            .from("otp_codes")
+            .delete()
+            .eq("id", insertedOtp.id);
+        }
+        
+        return new Response(
+          JSON.stringify({ 
+            error: "Failed to send verification code. Please try again." 
+          }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
+      
+      console.log(`OTP email sent successfully to ${email}, action: ${authAction}`);
 
-      // Return success with code info for testing when email fails
-      // In production, you'd remove the code from the response
+      // Return success - NEVER include the code in the response
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: emailSent 
-            ? `Verification code sent to ${email}` 
-            : `Code generated. Check your email or use code: ${code}`,
-          email_sent: emailSent,
-          // Include code for testing when Resend domain isn't verified
-          // REMOVE THIS IN PRODUCTION
-          ...(emailSent ? {} : { test_code: code }),
+          message: `Verification code sent to ${email}`,
+          email_sent: true,
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
 
     } else if (action === "verify") {
-      // VERIFY OTP
+      // VERIFY OTP with rate limiting
       const body: VerifyOtpRequest = await req.json();
       const { email, code, action: authAction } = body;
 
@@ -248,31 +260,100 @@ serve(async (req: Request): Promise<Response> => {
         );
       }
 
-      // Find the OTP
-      const { data: otpData, error: otpError } = await supabase
+      // Validate code format (6 digits only)
+      if (!/^\d{6}$/.test(code)) {
+        return new Response(
+          JSON.stringify({ error: "Invalid code format" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Find any OTP for this email (not matching code yet - for rate limiting)
+      const { data: otpRecord, error: findError } = await supabase
         .from("otp_codes")
         .select("*")
         .eq("email", email.toLowerCase())
-        .eq("code", code)
         .is("verified_at", null)
         .gt("expires_at", new Date().toISOString())
-        .single();
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-      if (otpError || !otpData) {
+      if (findError) {
+        console.error("Error finding OTP:", findError);
+        return new Response(
+          JSON.stringify({ error: "Verification failed. Please try again." }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (!otpRecord) {
         return new Response(
           JSON.stringify({ error: "Invalid or expired verification code" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      // Mark as verified
+      // Check if account is locked
+      if (otpRecord.locked_until && new Date(otpRecord.locked_until) > new Date()) {
+        const remainingMinutes = Math.ceil((new Date(otpRecord.locked_until).getTime() - Date.now()) / 60000);
+        return new Response(
+          JSON.stringify({ 
+            error: `Too many failed attempts. Please try again in ${remainingMinutes} minute${remainingMinutes === 1 ? '' : 's'}.` 
+          }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Check if code matches
+      if (otpRecord.code !== code) {
+        const currentAttempts = (otpRecord.attempts || 0) + 1;
+        const remainingAttempts = MAX_ATTEMPTS - currentAttempts;
+
+        // Update attempt count
+        if (currentAttempts >= MAX_ATTEMPTS) {
+          // Lock the account
+          await supabase
+            .from("otp_codes")
+            .update({ 
+              attempts: currentAttempts,
+              locked_until: new Date(Date.now() + LOCKOUT_DURATION_MS).toISOString()
+            })
+            .eq("id", otpRecord.id);
+
+          return new Response(
+            JSON.stringify({ 
+              error: "Too many failed attempts. Account locked for 15 minutes." 
+            }),
+            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Increment attempts
+        await supabase
+          .from("otp_codes")
+          .update({ attempts: currentAttempts })
+          .eq("id", otpRecord.id);
+
+        // Add small delay to slow down brute force
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * currentAttempts, 5000)));
+
+        return new Response(
+          JSON.stringify({ 
+            error: `Invalid code. ${remainingAttempts} attempt${remainingAttempts === 1 ? '' : 's'} remaining.` 
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Code is valid - mark as verified
       await supabase
         .from("otp_codes")
         .update({ verified_at: new Date().toISOString() })
-        .eq("id", otpData.id);
+        .eq("id", otpRecord.id);
 
       // Now sign in the user using Supabase Admin API
-      const metadata = otpData.metadata as { name?: string; username?: string } || {};
+      const metadata = otpRecord.metadata as { name?: string; username?: string } || {};
 
       if (authAction === "signup") {
         // Check if user exists
@@ -344,7 +425,7 @@ serve(async (req: Request): Promise<Response> => {
     console.error("Error in auth-otp function:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: "An error occurred. Please try again." }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
