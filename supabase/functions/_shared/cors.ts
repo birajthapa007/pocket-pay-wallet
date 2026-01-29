@@ -32,18 +32,19 @@ export function getCorsHeaders(requestOrigin?: string | null): Record<string, st
 function getAllowedOrigins(): string[] {
   const origins: string[] = []
   
-  // Always allow the preview and production Lovable domains
+  // Published domain (paypocket.lovable.app)
+  origins.push('https://paypocket.lovable.app')
+  
+  // Preview domains - both variants
   origins.push('https://id-preview--bf010dab-705c-43c8-aeec-b4776f85a038.lovable.app')
   origins.push('https://bf010dab-705c-43c8-aeec-b4776f85a038.lovableproject.com')
+  origins.push('https://bf010dab-705c-43c8-aeec-b4776f85a038.lovable.app')
   
   // Add custom domain if configured
   const customOrigin = Deno.env.get('ALLOWED_ORIGIN')
   if (customOrigin) {
     origins.push(customOrigin)
   }
-  
-  // Add any published domain
-  origins.push('https://bf010dab-705c-43c8-aeec-b4776f85a038.lovable.app')
   
   // Allow localhost in development
   const environment = Deno.env.get('ENVIRONMENT') || 'development'
