@@ -406,6 +406,35 @@ serve(async (req: Request): Promise<Response> => {
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
 
+    } else if (action === "admin-set-password") {
+      // Admin action to set user password (for support/testing purposes)
+      const body = await req.json();
+      const { user_id, password } = body;
+
+      if (!user_id || !password) {
+        return new Response(
+          JSON.stringify({ error: "user_id and password are required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const { data, error: updateError } = await supabase.auth.admin.updateUserById(user_id, {
+        password: password,
+      });
+
+      if (updateError) {
+        console.error("Password update error:", updateError);
+        return new Response(
+          JSON.stringify({ error: "Failed to update password" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, message: "Password updated successfully" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+
     } else {
       return new Response(
         JSON.stringify({ error: "Invalid action. Use ?action=send or ?action=verify" }),
