@@ -1,6 +1,6 @@
 // =========================================
 // POCKET PAY - Custom OTP Authentication
-// Generates OTP, stores it, and sends email with code
+// Generates OTP, stores it, and sends via email (Resend) or SMS (Twilio)
 // NO magic links - OTP code only
 // Forgiving verification - no lockouts
 // =========================================
@@ -14,7 +14,9 @@ const corsHeaders = {
 };
 
 interface SendOtpRequest {
-  email: string;
+  email?: string;
+  phone?: string;
+  channel: 'email' | 'sms';
   action: 'signup' | 'login' | 'recovery';
   name?: string;
   username?: string;
@@ -22,7 +24,9 @@ interface SendOtpRequest {
 }
 
 interface VerifyOtpRequest {
-  email: string;
+  email?: string;
+  phone?: string;
+  channel: 'email' | 'sms';
   code: string;
   action: 'signup' | 'login' | 'recovery';
 }
@@ -35,110 +39,85 @@ function generateOtp(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-serve(async (req: Request): Promise<Response> => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+// Send SMS via Twilio
+async function sendSmsTwilio(to: string, body: string): Promise<{ success: boolean; error?: string }> {
+  const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
+  const authToken = Deno.env.get("TWILIO_AUTH_TOKEN");
+  const fromNumber = Deno.env.get("TWILIO_PHONE_NUMBER");
+
+  if (!accountSid || !authToken || !fromNumber) {
+    console.error("Twilio credentials not configured");
+    return { success: false, error: "SMS service not configured" };
   }
-
-  const resendApiKey = Deno.env.get("RESEND_API_KEY");
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
-  if (!resendApiKey) {
-    return new Response(
-      JSON.stringify({ error: "RESEND_API_KEY not configured" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  }
-
-  if (!supabaseUrl || !supabaseServiceKey) {
-    return new Response(
-      JSON.stringify({ error: "Supabase configuration missing" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  }
-
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
-  const url = new URL(req.url);
-  const action = url.searchParams.get("action");
 
   try {
-    if (action === "send") {
-      // SEND OTP
-      const body: SendOtpRequest = await req.json();
-      const { email, action: authAction, name, username, password } = body;
+    const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+    const credentials = btoa(`${accountSid}:${authToken}`);
 
-      if (!email || !email.includes("@")) {
-        return new Response(
-          JSON.stringify({ error: "Valid email is required" }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Authorization": `Basic ${credentials}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        To: to,
+        From: fromNumber,
+        Body: body,
+      }),
+    });
 
-      // Generate OTP code
-      const code = generateOtp();
-      const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS); // 15 minutes
+    const data = await response.json();
 
-      // Delete any existing unused codes for this email
-      await supabase
-        .from("otp_codes")
-        .delete()
-        .eq("email", email.toLowerCase())
-        .is("verified_at", null);
+    if (!response.ok) {
+      console.error("Twilio API error:", data);
+      return { success: false, error: data.message || "Failed to send SMS" };
+    }
 
-      // Store the new code with attempt tracking
-      const { data: insertedOtp, error: insertError } = await supabase
-        .from("otp_codes")
-        .insert({
-          email: email.toLowerCase(),
-          code,
-          action: authAction,
-          metadata: { name, username, password },
-          expires_at: expiresAt.toISOString(),
-          attempts: 0,
-          locked_until: null,
-        })
-        .select('id')
-        .single();
+    console.log(`SMS sent successfully to ${to}, SID: ${data.sid}`);
+    return { success: true };
+  } catch (err) {
+    console.error("Twilio send error:", err);
+    return { success: false, error: "Failed to send SMS" };
+  }
+}
 
-      if (insertError) {
-        console.error("Error storing OTP:", insertError);
-        return new Response(
-          JSON.stringify({ error: "Failed to generate verification code" }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+// Send email via Resend
+async function sendEmailResend(
+  to: string,
+  code: string,
+  authAction: string,
+  resendApiKey: string
+): Promise<{ success: boolean; error?: string }> {
+  const subject = authAction === "signup"
+    ? "Welcome to Pocket Pay - Your Verification Code"
+    : authAction === "recovery"
+    ? "Reset Your Pocket Pay Password"
+    : "Your Pocket Pay Login Code";
 
-      // Send email via Resend with the code ONLY (no magic link)
-      const subject = authAction === "signup" 
-        ? "Welcome to Pocket Pay - Your Verification Code"
-        : authAction === "recovery"
-        ? "Reset Your Pocket Pay Password"
-        : "Your Pocket Pay Login Code";
+  const heading = authAction === "signup"
+    ? "Welcome to Pocket Pay! 🎉"
+    : authAction === "recovery"
+    ? "Password Reset Request"
+    : "Sign in to Pocket Pay";
 
-      const heading = authAction === "signup"
-        ? "Welcome to Pocket Pay! 🎉"
-        : authAction === "recovery"
-        ? "Password Reset Request"
-        : "Sign in to Pocket Pay";
+  const description = authAction === "signup"
+    ? "You're just one step away from managing your money smarter."
+    : authAction === "recovery"
+    ? "Use the code below to reset your password."
+    : "Use the code below to securely access your wallet.";
 
-      const description = authAction === "signup"
-        ? "You're just one step away from managing your money smarter."
-        : authAction === "recovery"
-        ? "Use the code below to reset your password."
-        : "Use the code below to securely access your wallet.";
-
-      const emailResponse = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${resendApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: "Pocket Pay <noreply@wenevertrust.com>",
-          to: [email],
-          subject,
-          html: `
+  const emailResponse = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${resendApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: "Pocket Pay <noreply@wenevertrust.com>",
+      to: [to],
+      subject,
+      html: `
 <!DOCTYPE html>
 <html>
 <head>
@@ -150,7 +129,6 @@ serve(async (req: Request): Promise<Response> => {
     <tr>
       <td align="center" style="padding: 40px 20px;">
         <table role="presentation" width="100%" style="max-width: 480px; background: linear-gradient(135deg, #161b22 0%, #0f1419 100%); border-radius: 24px; border: 1px solid #30363d; overflow: hidden;">
-          
           <tr>
             <td style="padding: 40px 40px 24px; text-align: center;">
               <div style="display: inline-block; background: linear-gradient(135deg, #2dd4bf 0%, #14b8a6 100%); width: 64px; height: 64px; border-radius: 16px; margin-bottom: 24px; line-height: 64px;">
@@ -160,7 +138,6 @@ serve(async (req: Request): Promise<Response> => {
               <p style="margin: 12px 0 0; color: #8b949e; font-size: 15px; line-height: 1.5;">${description}</p>
             </td>
           </tr>
-          
           <tr>
             <td style="padding: 0 40px 32px;">
               <div style="background: #21262d; border-radius: 16px; padding: 32px; text-align: center; border: 1px solid #30363d;">
@@ -170,7 +147,6 @@ serve(async (req: Request): Promise<Response> => {
               </div>
             </td>
           </tr>
-          
           <tr>
             <td style="padding: 0 40px 32px;">
               <p style="margin: 0; color: #6e7681; font-size: 13px; text-align: center;">
@@ -178,7 +154,6 @@ serve(async (req: Request): Promise<Response> => {
               </p>
             </td>
           </tr>
-          
           <tr>
             <td style="padding: 24px 40px; background: #161b22; border-top: 1px solid #30363d;">
               <p style="margin: 0; color: #8b949e; font-size: 12px; text-align: center;">
@@ -186,9 +161,7 @@ serve(async (req: Request): Promise<Response> => {
               </p>
             </td>
           </tr>
-          
         </table>
-        
         <p style="margin: 24px 0 0; color: #6e7681; font-size: 12px;">
           © ${new Date().getFullYear()} Pocket Pay. All rights reserved.
         </p>
@@ -197,51 +170,179 @@ serve(async (req: Request): Promise<Response> => {
   </table>
 </body>
 </html>
-          `,
-        }),
-      });
+      `,
+    }),
+  });
 
-      const emailData = await emailResponse.json();
-      
-      if (!emailResponse.ok) {
-        console.error("Resend API error:", emailData);
-        
-        // Delete the OTP code since we can't deliver it securely
-        if (insertedOtp?.id) {
-          await supabase
-            .from("otp_codes")
-            .delete()
-            .eq("id", insertedOtp.id);
-        }
-        
+  const emailData = await emailResponse.json();
+
+  if (!emailResponse.ok) {
+    console.error("Resend API error:", emailData);
+    return { success: false, error: "Failed to send verification email" };
+  }
+
+  return { success: true };
+}
+
+serve(async (req: Request): Promise<Response> => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  const resendApiKey = Deno.env.get("RESEND_API_KEY");
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    return new Response(
+      JSON.stringify({ error: "Server configuration missing" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  const url = new URL(req.url);
+  const action = url.searchParams.get("action");
+
+  try {
+    if (action === "send") {
+      // ========== SEND OTP ==========
+      const body: SendOtpRequest = await req.json();
+      const { email, phone, channel, action: authAction, name, username, password } = body;
+
+      // Determine the contact identifier
+      const contactEmail = channel === 'email' ? email?.toLowerCase() : null;
+      const contactPhone = channel === 'sms' ? phone : null;
+
+      if (channel === 'email' && (!contactEmail || !contactEmail.includes("@"))) {
         return new Response(
-          JSON.stringify({ 
-            error: "Failed to send verification code. Please try again." 
-          }),
+          JSON.stringify({ error: "Valid email is required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (channel === 'sms' && (!contactPhone || contactPhone.length < 10)) {
+        return new Response(
+          JSON.stringify({ error: "Valid phone number is required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Generate OTP code
+      const code = generateOtp();
+      const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
+
+      // Delete any existing unused codes for this contact
+      if (channel === 'email') {
+        await supabase
+          .from("otp_codes")
+          .delete()
+          .eq("email", contactEmail!)
+          .is("verified_at", null);
+      } else {
+        await supabase
+          .from("otp_codes")
+          .delete()
+          .eq("phone", contactPhone!)
+          .is("verified_at", null);
+      }
+
+      // Store the new code
+      const insertPayload: Record<string, unknown> = {
+        email: contactEmail || `phone_${contactPhone}@placeholder.local`,
+        phone: contactPhone || null,
+        code,
+        action: authAction,
+        metadata: { name, username, password, channel },
+        expires_at: expiresAt.toISOString(),
+        attempts: 0,
+        locked_until: null,
+      };
+
+      const { data: insertedOtp, error: insertError } = await supabase
+        .from("otp_codes")
+        .insert(insertPayload)
+        .select('id')
+        .single();
+
+      if (insertError) {
+        console.error("Error storing OTP:", insertError);
+        return new Response(
+          JSON.stringify({ error: "Failed to generate verification code" }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      
-      console.log(`OTP email sent successfully to ${email}, action: ${authAction}`);
 
-      // Return success - NEVER include the code in the response
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          message: `Verification code sent to ${email}`,
-          email_sent: true,
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      // Send the code via the appropriate channel
+      if (channel === 'sms') {
+        const smsBody = `Your Pocket Pay verification code is: ${code}. It expires in 30 minutes. Don't share this code with anyone.`;
+        const smsResult = await sendSmsTwilio(contactPhone!, smsBody);
+
+        if (!smsResult.success) {
+          // Delete the OTP since we couldn't deliver it
+          if (insertedOtp?.id) {
+            await supabase.from("otp_codes").delete().eq("id", insertedOtp.id);
+          }
+          return new Response(
+            JSON.stringify({ error: smsResult.error || "Failed to send SMS. Please try again." }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        console.log(`OTP SMS sent successfully to ${contactPhone}, action: ${authAction}`);
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: `Verification code sent to ${contactPhone}`,
+            sms_sent: true,
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } else {
+        // Email channel
+        if (!resendApiKey) {
+          if (insertedOtp?.id) {
+            await supabase.from("otp_codes").delete().eq("id", insertedOtp.id);
+          }
+          return new Response(
+            JSON.stringify({ error: "Email service not configured" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const emailResult = await sendEmailResend(contactEmail!, code, authAction, resendApiKey);
+
+        if (!emailResult.success) {
+          if (insertedOtp?.id) {
+            await supabase.from("otp_codes").delete().eq("id", insertedOtp.id);
+          }
+          return new Response(
+            JSON.stringify({ error: emailResult.error || "Failed to send verification code. Please try again." }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        console.log(`OTP email sent successfully to ${contactEmail}, action: ${authAction}`);
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: `Verification code sent to ${contactEmail}`,
+            email_sent: true,
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
     } else if (action === "verify") {
-      // VERIFY OTP with rate limiting
+      // ========== VERIFY OTP ==========
       const body: VerifyOtpRequest = await req.json();
-      const { email, code, action: authAction } = body;
+      const { email, phone, channel, code, action: authAction } = body;
 
-      if (!email || !code) {
+      if (!code) {
         return new Response(
-          JSON.stringify({ error: "Email and code are required" }),
+          JSON.stringify({ error: "Verification code is required" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -254,16 +355,27 @@ serve(async (req: Request): Promise<Response> => {
         );
       }
 
-      // Find any OTP for this email (not matching code yet - for rate limiting)
-      const { data: otpRecord, error: findError } = await supabase
+      // Build query to find OTP record
+      let query = supabase
         .from("otp_codes")
         .select("*")
-        .eq("email", email.toLowerCase())
         .is("verified_at", null)
         .gt("expires_at", new Date().toISOString())
         .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(1);
+
+      if (channel === 'sms' && phone) {
+        query = query.eq("phone", phone);
+      } else if (email) {
+        query = query.eq("email", email.toLowerCase());
+      } else {
+        return new Response(
+          JSON.stringify({ error: "Email or phone is required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const { data: otpRecord, error: findError } = await query.maybeSingle();
 
       if (findError) {
         console.error("Error finding OTP:", findError);
@@ -280,9 +392,8 @@ serve(async (req: Request): Promise<Response> => {
         );
       }
 
-      // Check if account is locked (legacy - now we just clear it)
+      // Clear any old locks
       if (otpRecord.locked_until) {
-        // Clear any old locks
         await supabase
           .from("otp_codes")
           .update({ locked_until: null, attempts: 0 })
@@ -291,14 +402,9 @@ serve(async (req: Request): Promise<Response> => {
 
       // Check if code matches
       if (otpRecord.code !== code) {
-        // Just inform the user, no lockout
-        // Add tiny delay to slow down automated attacks (1 second max)
         await new Promise(resolve => setTimeout(resolve, 1000));
-
         return new Response(
-          JSON.stringify({ 
-            error: "Invalid code. Please check and try again, or request a new code." 
-          }),
+          JSON.stringify({ error: "Invalid code. Please check and try again, or request a new code." }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -310,30 +416,44 @@ serve(async (req: Request): Promise<Response> => {
         .eq("id", otpRecord.id);
 
       // Get metadata from OTP record
-      const metadata = otpRecord.metadata as { name?: string; username?: string; password?: string } || {};
-      const normalizedEmail = email.toLowerCase();
+      const metadata = otpRecord.metadata as { name?: string; username?: string; password?: string; channel?: string } || {};
+
+      // Determine the user's email for auth system
+      // For phone users, we need to handle differently
+      const isPhoneAuth = channel === 'sms' || metadata.channel === 'sms';
+      const normalizedEmail = isPhoneAuth
+        ? `phone_${phone}@placeholder.local`
+        : (email || otpRecord.email).toLowerCase();
+      const userPhone = isPhoneAuth ? phone : null;
 
       // Check if user exists
       const { data: existingUsers } = await supabase.auth.admin.listUsers();
-      let existingUser = existingUsers?.users?.find(u => u.email?.toLowerCase() === normalizedEmail);
+      let existingUser = existingUsers?.users?.find(u => {
+        if (isPhoneAuth && userPhone) {
+          return u.phone === userPhone || u.email === normalizedEmail;
+        }
+        return u.email?.toLowerCase() === normalizedEmail;
+      });
 
       if (authAction === "signup" && !existingUser) {
-        // Create new user with password if provided
-        const createUserPayload: {
-          email: string;
-          email_confirm: boolean;
-          password?: string;
-          user_metadata: { name?: string; username?: string };
-        } = {
-          email: normalizedEmail,
+        // Create new user
+        const createUserPayload: Record<string, unknown> = {
           email_confirm: true,
           user_metadata: {
             name: metadata.name,
             username: metadata.username,
           },
         };
-        
-        // Add password if provided
+
+        if (isPhoneAuth && userPhone) {
+          // For phone auth, set both email (placeholder) and phone
+          createUserPayload.email = normalizedEmail;
+          createUserPayload.phone = userPhone;
+          createUserPayload.phone_confirm = true;
+        } else {
+          createUserPayload.email = normalizedEmail;
+        }
+
         if (metadata.password && metadata.password.length >= 6) {
           createUserPayload.password = metadata.password;
         }
@@ -349,21 +469,28 @@ serve(async (req: Request): Promise<Response> => {
         }
 
         existingUser = newUser.user;
-        console.log("Created new user:", existingUser?.id);
+        console.log("Created new user:", existingUser?.id, isPhoneAuth ? `phone: ${userPhone}` : `email: ${normalizedEmail}`);
+
+        // Update profile with phone number if phone auth
+        if (isPhoneAuth && userPhone && existingUser) {
+          await supabase
+            .from("profiles")
+            .update({ phone: userPhone })
+            .eq("id", existingUser.id);
+        }
       }
 
       if (!existingUser) {
         return new Response(
-          JSON.stringify({ error: "No account found with this email. Please sign up first." }),
+          JSON.stringify({ error: "No account found. Please sign up first." }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      // Generate a proper session using admin API
-      // We need to generate a magic link and extract the token
+      // Generate session via magic link
       const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
         type: "magiclink",
-        email: normalizedEmail,
+        email: existingUser.email || normalizedEmail,
       });
 
       if (linkError || !linkData) {
@@ -374,7 +501,6 @@ serve(async (req: Request): Promise<Response> => {
         );
       }
 
-      // Extract the token from the action_link
       const actionLink = linkData.properties?.action_link;
       if (!actionLink) {
         console.error("No action link generated");
@@ -384,22 +510,18 @@ serve(async (req: Request): Promise<Response> => {
         );
       }
 
-      // Parse the token from the URL
       const linkUrl = new URL(actionLink);
       const tokenHash = linkUrl.searchParams.get('token_hash') || linkData.properties?.hashed_token;
-      const accessToken = linkUrl.hash?.match(/access_token=([^&]+)/)?.[1];
-      const refreshToken = linkUrl.hash?.match(/refresh_token=([^&]+)/)?.[1];
 
-      console.log("Generated session for:", normalizedEmail);
+      console.log("Generated session for:", existingUser.email || userPhone);
 
       return new Response(
-        JSON.stringify({ 
+        JSON.stringify({
           success: true,
           verified: true,
-          // Return the token_hash for client-side session creation
           token_hash: tokenHash,
           type: "magiclink",
-          email: normalizedEmail,
+          email: existingUser.email || normalizedEmail,
           user_id: existingUser.id,
           message: authAction === "signup" ? "Account created successfully" : "Login successful",
         }),
@@ -407,7 +529,6 @@ serve(async (req: Request): Promise<Response> => {
       );
 
     } else if (action === "admin-set-password") {
-      // Admin action to set user password (for support/testing purposes)
       const body = await req.json();
       const { user_id, password } = body;
 
@@ -418,7 +539,7 @@ serve(async (req: Request): Promise<Response> => {
         );
       }
 
-      const { data, error: updateError } = await supabase.auth.admin.updateUserById(user_id, {
+      const { error: updateError } = await supabase.auth.admin.updateUserById(user_id, {
         password: password,
       });
 
