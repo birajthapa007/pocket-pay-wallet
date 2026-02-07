@@ -360,24 +360,37 @@ export const cardsApi = {
 // ==========================================
 
 export const authApi = {
-  // Send OTP to email using custom edge function (shows code in email)
-  async sendOtpEmail(email: string, action: 'signup' | 'login' | 'recovery' = 'login', metadata?: { name?: string; username?: string; password?: string }): Promise<{ error: string | null; testCode?: string }> {
+  // Send OTP via custom edge function (supports both email and SMS)
+  async sendOtp(
+    contact: string,
+    channel: 'email' | 'sms',
+    action: 'signup' | 'login' | 'recovery' = 'login',
+    metadata?: { name?: string; username?: string; password?: string }
+  ): Promise<{ error: string | null }> {
     try {
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/auth-otp?action=send`;
       
+      const body: Record<string, unknown> = {
+        channel,
+        action,
+        name: metadata?.name,
+        username: metadata?.username,
+        password: metadata?.password,
+      };
+
+      if (channel === 'email') {
+        body.email = contact;
+      } else {
+        body.phone = contact;
+      }
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
-        body: JSON.stringify({
-          email,
-          action,
-          name: metadata?.name,
-          username: metadata?.username,
-          password: metadata?.password,
-        }),
+        body: JSON.stringify(body),
       });
 
       const data = await response.json();
@@ -386,30 +399,24 @@ export const authApi = {
         return { error: data.error || 'Failed to send verification code' };
       }
       
-      // Return test code if email couldn't be sent (Resend domain not verified)
-      return { error: null, testCode: data.test_code };
+      return { error: null };
     } catch (err) {
       console.error('Send OTP error:', err);
       return { error: 'Failed to send verification code' };
     }
   },
 
-  // Send OTP to phone (still uses Supabase's built-in SMS)
-  async sendOtpPhone(phone: string): Promise<{ error: string | null }> {
-    const { error } = await supabase.auth.signInWithOtp({
-      phone,
-      options: {
-        shouldCreateUser: true,
-      },
-    });
-    
-    if (error) {
-      return { error: error.message };
-    }
-    return { error: null };
+  // Backwards-compatible wrappers
+  async sendOtpEmail(email: string, action: 'signup' | 'login' | 'recovery' = 'login', metadata?: { name?: string; username?: string; password?: string }): Promise<{ error: string | null; testCode?: string }> {
+    const result = await this.sendOtp(email, 'email', action, metadata);
+    return { error: result.error };
   },
 
-  // Verify OTP for signup
+  async sendOtpPhone(phone: string): Promise<{ error: string | null }> {
+    return this.sendOtp(phone, 'sms', 'login');
+  },
+
+  // Verify OTP for signup - uses custom edge function for both email and phone
   async verifyOtpSignup(params: {
     contact: string;
     type: 'email' | 'phone';
@@ -418,20 +425,28 @@ export const authApi = {
     username: string;
   }): Promise<{ user: UserProfile | null; error: string | null }> {
     try {
-      // First verify with our custom OTP
+      const channel = params.type === 'phone' ? 'sms' : 'email';
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/auth-otp?action=verify`;
       
+      const body: Record<string, unknown> = {
+        channel,
+        code: params.otp,
+        action: 'signup',
+      };
+
+      if (channel === 'sms') {
+        body.phone = params.contact;
+      } else {
+        body.email = params.contact.toLowerCase();
+      }
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
-        body: JSON.stringify({
-          email: params.contact.toLowerCase(),
-          code: params.otp,
-          action: 'signup',
-        }),
+        body: JSON.stringify(body),
       });
 
       const data = await response.json();
@@ -440,9 +455,8 @@ export const authApi = {
         return { user: null, error: data.error || 'Verification failed' };
       }
 
-      // If we got a token_hash directly, use it to verify
+      // If we got a token_hash, use it to create session
       if (data.token_hash) {
-        // Use the hashed token with verifyOtp
         const { data: sessionData, error: sessionError } = await supabase.auth.verifyOtp({
           token_hash: data.token_hash,
           type: 'magiclink',
@@ -450,29 +464,7 @@ export const authApi = {
         
         if (sessionError) {
           console.error('Session verification error:', sessionError);
-          // Try email OTP as fallback
-          const { data: fallbackData, error: fallbackError } = await supabase.auth.verifyOtp({
-            email: params.contact.toLowerCase(),
-            token: params.otp,
-            type: 'email',
-          });
-          
-          if (fallbackError) {
-            return { user: null, error: 'Failed to complete login. Please try again.' };
-          }
-          
-          if (fallbackData.user) {
-            return {
-              user: {
-                id: fallbackData.user.id,
-                name: params.name,
-                username: params.username,
-                email: params.type === 'email' ? params.contact : undefined,
-                phone: params.type === 'phone' ? params.contact : undefined,
-              },
-              error: null,
-            };
-          }
+          return { user: null, error: 'Failed to complete signup. Please try again.' };
         }
         
         if (sessionData?.user) {
@@ -500,97 +492,42 @@ export const authApi = {
         }
       }
 
-      // Fallback: try Supabase's built-in OTP verification
-      const verifyParams = params.type === 'email' 
-        ? { email: params.contact.toLowerCase(), token: params.otp, type: 'email' as const }
-        : { phone: params.contact, token: params.otp, type: 'sms' as const };
-
-      const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp(verifyParams);
-
-      if (verifyError) {
-        return { user: null, error: verifyError.message };
-      }
-
-      if (verifyData.user) {
-        await supabase.auth.updateUser({
-          data: {
-            name: params.name,
-            username: params.username,
-          },
-        });
-
-        await supabase
-          .from('profiles')
-          .update({
-            name: params.name,
-            username: params.username,
-            email: params.type === 'email' ? params.contact : null,
-            phone: params.type === 'phone' ? params.contact : null,
-          })
-          .eq('id', verifyData.user.id);
-      }
-
-      return {
-        user: verifyData.user ? {
-          id: verifyData.user.id,
-          name: params.name,
-          username: params.username,
-          email: params.type === 'email' ? params.contact : undefined,
-          phone: params.type === 'phone' ? params.contact : undefined,
-        } : null,
-        error: null,
-      };
+      return { user: null, error: 'Verification failed. Please try again.' };
     } catch (err) {
       console.error('Verify OTP error:', err);
       return { user: null, error: 'Verification failed' };
     }
   },
 
-  // Verify OTP for login - uses custom edge function
+  // Verify OTP for login - uses custom edge function for both email and phone
   async verifyOtpLogin(params: {
     contact: string;
     type: 'email' | 'phone';
     otp: string;
   }): Promise<{ user: UserProfile | null; error: string | null }> {
     try {
-      // For phone, use Supabase's built-in SMS OTP
-      if (params.type === 'phone') {
-        const { data, error } = await supabase.auth.verifyOtp({
-          phone: params.contact,
-          token: params.otp,
-          type: 'sms',
-        });
-
-        if (error) {
-          return { user: null, error: error.message };
-        }
-
-        return {
-          user: data.user ? {
-            id: data.user.id,
-            name: data.user.user_metadata?.name || 'User',
-            username: data.user.user_metadata?.username || '',
-            email: data.user.email || undefined,
-            phone: data.user.phone || undefined,
-          } : null,
-          error: null,
-        };
-      }
-
-      // For email, use our custom OTP verification
+      const channel = params.type === 'phone' ? 'sms' : 'email';
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/auth-otp?action=verify`;
       
+      const body: Record<string, unknown> = {
+        channel,
+        code: params.otp,
+        action: 'login',
+      };
+
+      if (channel === 'sms') {
+        body.phone = params.contact;
+      } else {
+        body.email = params.contact.toLowerCase();
+      }
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
-        body: JSON.stringify({
-          email: params.contact.toLowerCase(),
-          code: params.otp,
-          action: 'login',
-        }),
+        body: JSON.stringify(body),
       });
 
       const data = await response.json();

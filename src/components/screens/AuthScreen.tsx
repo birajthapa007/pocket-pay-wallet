@@ -120,20 +120,16 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
           return;
         }
         
-        const { error: otpError, testCode } = await authApi.sendOtpEmail(
+        const { error: otpError } = await authApi.sendOtp(
           email,
+          'email',
           mode === 'signup' ? 'signup' : 'login',
           mode === 'signup' ? { name: getFullName(), username: username.toLowerCase().trim(), password } : undefined
         );
         if (otpError) {
           setError(otpError);
         } else {
-          // Show test code if email delivery failed (Resend domain not verified)
-          if (testCode) {
-            setSuccessMessage(`Email couldn't be sent. Use test code: ${testCode}`);
-          } else {
-            setSuccessMessage(`Verification code sent to ${email}`);
-          }
+          setSuccessMessage(`Verification code sent to ${email}`);
           setStep('otp');
         }
       } else {
@@ -144,7 +140,12 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
         }
         
         const fullPhone = `+1${phone}`;
-        const { error: otpError } = await authApi.sendOtpPhone(fullPhone);
+        const { error: otpError } = await authApi.sendOtp(
+          fullPhone,
+          'sms',
+          mode === 'signup' ? 'signup' : 'login',
+          mode === 'signup' ? { name: getFullName(), username: username.toLowerCase().trim(), password } : undefined
+        );
         if (otpError) {
           setError(otpError);
         } else {
@@ -171,7 +172,7 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
           return;
         }
         
-        const { error: otpError } = await authApi.sendOtpEmail(email);
+        const { error: otpError } = await authApi.sendOtp(email, 'email', 'recovery');
         if (otpError) {
           setError(otpError);
         } else {
@@ -186,7 +187,7 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
         }
         
         const fullPhone = `+1${phone}`;
-        const { error: otpError } = await authApi.sendOtpPhone(fullPhone);
+        const { error: otpError } = await authApi.sendOtp(fullPhone, 'sms', 'recovery');
         if (otpError) {
           setError(otpError);
         } else {
