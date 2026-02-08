@@ -1,12 +1,16 @@
 // =========================================
 // POCKET PAY - Custom OTP Authentication
-// Generates OTP, stores it, and sends via email (Resend) or SMS (Twilio)
+// Generates OTP, stores it, and sends via email (Resend)
+// Phone OTP handled by Firebase Auth (verified via ID token)
 // NO magic links - OTP code only
 // Forgiving verification - no lockouts
 // =========================================
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+
+// Firebase project ID for token verification
+const FIREBASE_PROJECT_ID = "pocket-pay-300bc";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -39,52 +43,40 @@ function generateOtp(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Send OTP via Twilio WhatsApp using Content Template
-async function sendWhatsAppTwilio(to: string, otpCode: string): Promise<{ success: boolean; error?: string }> {
-  const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
-  const authToken = Deno.env.get("TWILIO_AUTH_TOKEN");
-  const fromNumber = Deno.env.get("TWILIO_PHONE_NUMBER");
-  const contentSid = Deno.env.get("TWILIO_CONTENT_SID") || "HX229f5a04fd0510ce1b071852155d3e75";
-
-  if (!accountSid || !authToken || !fromNumber) {
-    console.error("Twilio credentials not configured");
-    return { success: false, error: "WhatsApp service not configured" };
-  }
-
+// Verify Firebase ID token (phone auth)
+async function verifyFirebaseToken(idToken: string): Promise<{ uid: string; phone: string } | null> {
   try {
-    const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
-    const credentials = btoa(`${accountSid}:${authToken}`);
-
-    // Prefix both To and From with 'whatsapp:' for WhatsApp delivery
-    const whatsappTo = to.startsWith("whatsapp:") ? to : `whatsapp:${to}`;
-    const whatsappFrom = fromNumber.startsWith("whatsapp:") ? fromNumber : `whatsapp:${fromNumber}`;
-
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Authorization": `Basic ${credentials}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        To: whatsappTo,
-        From: whatsappFrom,
-        ContentSid: contentSid,
-        ContentVariables: JSON.stringify({ "1": otpCode }),
-      }),
-    });
-
-    const data = await response.json();
+    // Use Google's tokeninfo endpoint to verify the Firebase ID token
+    // First, fetch Google's public keys for Firebase
+    const response = await fetch(
+      `https://www.googleapis.com/identitytoolkit/v3/relyingparty/getAccountInfo?key=AIzaSyC5MNvdJwNyGyebhNopUC5fEsVWcyMs5ZQ`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      }
+    );
 
     if (!response.ok) {
-      console.error("Twilio WhatsApp API error:", data);
-      return { success: false, error: data.message || "Failed to send WhatsApp message" };
+      console.error("Firebase token verification failed:", await response.text());
+      return null;
     }
 
-    console.log(`WhatsApp OTP sent successfully to ${to}, SID: ${data.sid}`);
-    return { success: true };
+    const data = await response.json();
+    const user = data.users?.[0];
+    
+    if (!user || !user.phoneNumber) {
+      console.error("Firebase token missing phone number");
+      return null;
+    }
+
+    return {
+      uid: user.localId,
+      phone: user.phoneNumber,
+    };
   } catch (err) {
-    console.error("Twilio WhatsApp send error:", err);
-    return { success: false, error: "Failed to send WhatsApp message" };
+    console.error("Firebase token verification error:", err);
+    return null;
   }
 }
 
@@ -281,26 +273,21 @@ serve(async (req: Request): Promise<Response> => {
 
       // Send the code via the appropriate channel
       if (channel === 'sms') {
-        const whatsappResult = await sendWhatsAppTwilio(contactPhone!, code);
+        // Phone OTP is handled by Firebase on the client side
+        // We still store metadata for signup (name, username, password)
+        // but don't need to send the OTP - Firebase does that
+        console.log(`Phone auth metadata stored for ${contactPhone}, action: ${authAction}`);
 
-        if (!whatsappResult.success) {
-          // Delete the OTP since we couldn't deliver it
-          if (insertedOtp?.id) {
-            await supabase.from("otp_codes").delete().eq("id", insertedOtp.id);
-          }
-          return new Response(
-            JSON.stringify({ error: whatsappResult.error || "Failed to send WhatsApp message. Please try again." }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+        // Clean up the OTP record since Firebase handles code delivery
+        if (insertedOtp?.id) {
+          await supabase.from("otp_codes").delete().eq("id", insertedOtp.id);
         }
-
-        console.log(`OTP WhatsApp sent successfully to ${contactPhone}, action: ${authAction}`);
 
         return new Response(
           JSON.stringify({
             success: true,
-            message: `Verification code sent via WhatsApp to ${contactPhone}`,
-            whatsapp_sent: true,
+            message: `Phone verification handled by Firebase`,
+            firebase_phone: true,
           }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
@@ -533,6 +520,122 @@ serve(async (req: Request): Promise<Response> => {
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
 
+    } else if (action === "verify-firebase") {
+      // ========== VERIFY FIREBASE PHONE AUTH ==========
+      const body = await req.json();
+      const { firebase_id_token, auth_action, name, username, password } = body;
+
+      if (!firebase_id_token) {
+        return new Response(
+          JSON.stringify({ error: "Firebase ID token is required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Verify the Firebase token
+      const firebaseUser = await verifyFirebaseToken(firebase_id_token);
+      if (!firebaseUser) {
+        return new Response(
+          JSON.stringify({ error: "Invalid or expired phone verification. Please try again." }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const userPhone = firebaseUser.phone;
+      const normalizedEmail = `phone_${userPhone}@placeholder.local`;
+
+      // Check if user exists in Supabase
+      const { data: existingUsers } = await supabase.auth.admin.listUsers();
+      let existingUser = existingUsers?.users?.find(u => 
+        u.phone === userPhone || u.email === normalizedEmail
+      );
+
+      if (auth_action === "signup" && !existingUser) {
+        // Create new user in Supabase
+        const createUserPayload: Record<string, unknown> = {
+          email: normalizedEmail,
+          phone: userPhone,
+          phone_confirm: true,
+          email_confirm: true,
+          user_metadata: {
+            name: name || "User",
+            username: username || userPhone.replace(/\\D/g, ''),
+          },
+        };
+
+        if (password && password.length >= 6) {
+          createUserPayload.password = password;
+        }
+
+        const { data: newUser, error: createError } = await supabase.auth.admin.createUser(createUserPayload);
+
+        if (createError) {
+          console.error("User creation error:", createError);
+          return new Response(
+            JSON.stringify({ error: "Failed to create account. Please try again." }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        existingUser = newUser.user;
+        console.log("Created new user via Firebase phone auth:", existingUser?.id, userPhone);
+
+        // Update profile
+        if (existingUser) {
+          await supabase
+            .from("profiles")
+            .update({ phone: userPhone, name: name || "User", username: username || userPhone.replace(/\\D/g, '') })
+            .eq("id", existingUser.id);
+        }
+      }
+
+      if (!existingUser) {
+        return new Response(
+          JSON.stringify({ error: "No account found with this phone number. Please sign up first." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Generate Supabase session
+      const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+        type: "magiclink",
+        email: existingUser.email || normalizedEmail,
+      });
+
+      if (linkError || !linkData) {
+        console.error("Link generation error:", linkError);
+        return new Response(
+          JSON.stringify({ error: "Failed to create login session. Please try again." }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const fbActionLink = linkData.properties?.action_link;
+      if (!fbActionLink) {
+        return new Response(
+          JSON.stringify({ error: "Failed to create login session." }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const fbLinkUrl = new URL(fbActionLink);
+      const fbTokenHash = fbLinkUrl.searchParams.get('token_hash') || linkData.properties?.hashed_token;
+
+      console.log("Firebase phone auth session for:", userPhone, existingUser.id);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          verified: true,
+          token_hash: fbTokenHash,
+          type: "magiclink",
+          email: existingUser.email || normalizedEmail,
+          user_id: existingUser.id,
+          message: auth_action === "signup" ? "Account created successfully" : "Login successful",
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+
     } else if (action === "admin-set-password") {
       const body = await req.json();
       const { user_id, password } = body;
@@ -563,7 +666,7 @@ serve(async (req: Request): Promise<Response> => {
 
     } else {
       return new Response(
-        JSON.stringify({ error: "Invalid action. Use ?action=send or ?action=verify" }),
+        JSON.stringify({ error: "Invalid action. Use ?action=send, ?action=verify, or ?action=verify-firebase" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

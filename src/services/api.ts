@@ -413,7 +413,74 @@ export const authApi = {
   },
 
   async sendOtpPhone(phone: string): Promise<{ error: string | null }> {
-    return this.sendOtp(phone, 'sms', 'login');
+    // Phone OTP is now handled by Firebase client-side
+    // This is kept for API compatibility but is a no-op
+    return { error: null };
+  },
+
+  // Verify Firebase phone auth token and create/login Supabase session
+  async verifyFirebasePhone(params: {
+    firebaseIdToken: string;
+    authAction: 'signup' | 'login' | 'recovery';
+    name?: string;
+    username?: string;
+    password?: string;
+  }): Promise<{ user: UserProfile | null; error: string | null }> {
+    try {
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/auth-otp?action=verify-firebase`;
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({
+          firebase_id_token: params.firebaseIdToken,
+          auth_action: params.authAction,
+          name: params.name,
+          username: params.username,
+          password: params.password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return { user: null, error: data.error || 'Phone verification failed' };
+      }
+
+      // Create Supabase session from token_hash
+      if (data.token_hash) {
+        const { data: sessionData, error: sessionError } = await supabase.auth.verifyOtp({
+          token_hash: data.token_hash,
+          type: 'magiclink',
+        });
+
+        if (sessionError) {
+          console.error('Session verification error:', sessionError);
+          return { user: null, error: 'Failed to complete login. Please try again.' };
+        }
+
+        if (sessionData?.user) {
+          return {
+            user: {
+              id: sessionData.user.id,
+              name: sessionData.user.user_metadata?.name || 'User',
+              username: sessionData.user.user_metadata?.username || '',
+              email: sessionData.user.email || undefined,
+              phone: sessionData.user.phone || undefined,
+            },
+            error: null,
+          };
+        }
+      }
+
+      return { user: null, error: 'Verification failed. Please try again.' };
+    } catch (err) {
+      console.error('Firebase phone verify error:', err);
+      return { user: null, error: 'Phone verification failed' };
+    }
   },
 
   // Verify OTP for signup - uses custom edge function for both email and phone

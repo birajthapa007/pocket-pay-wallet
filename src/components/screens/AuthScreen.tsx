@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Shield, Loader2, Mail, Phone, ArrowLeft, KeyRound, UserPlus, Zap, CreditCard, TrendingUp, Send, Fingerprint, MessageCircle } from 'lucide-react';
+import { Shield, Loader2, Mail, Phone, ArrowLeft, KeyRound, UserPlus, Zap, CreditCard, TrendingUp, Send, Fingerprint, Smartphone } from 'lucide-react';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { authApi } from '@/services/api';
+import { useFirebasePhoneAuth } from '@/hooks/useFirebasePhoneAuth';
 
 interface AuthScreenProps {
   onSuccess: () => void;
@@ -21,6 +22,10 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  
+  // Firebase Phone Auth
+  const firebasePhone = useFirebasePhoneAuth();
+  const recaptchaContainerRef = useRef<HTMLDivElement>(null);
   
   // Form fields
   const [email, setEmail] = useState('');
@@ -52,14 +57,28 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
     setMethod(selectedMethod);
     setStep('details');
     setError(null);
+    
+    // Setup reCAPTCHA for phone auth
+    if (selectedMethod === 'phone') {
+      setTimeout(() => {
+        firebasePhone.setupRecaptcha('recaptcha-container');
+      }, 300);
+    }
   };
 
   const handleBack = () => {
     if (step === 'details' || step === 'forgot') {
       setStep('choose');
       setMethod(null);
+      firebasePhone.resetRecaptcha();
     } else if (step === 'otp' || step === 'password') {
       setStep('details');
+      // Re-setup reCAPTCHA if going back to phone details
+      if (method === 'phone') {
+        setTimeout(() => {
+          firebasePhone.setupRecaptcha('recaptcha-container');
+        }, 300);
+      }
     }
     setError(null);
     setOtp('');
@@ -133,6 +152,7 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
           setStep('otp');
         }
       } else {
+        // Phone auth via Firebase
         if (!phone || phone.length < 10) {
           setError('Please enter a valid 10-digit phone number');
           setIsLoading(false);
@@ -140,16 +160,12 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
         }
         
         const fullPhone = `+1${phone}`;
-        const { error: otpError } = await authApi.sendOtp(
-          fullPhone,
-          'sms',
-          mode === 'signup' ? 'signup' : 'login',
-          mode === 'signup' ? { name: getFullName(), username: username.toLowerCase().trim(), password } : undefined
-        );
-        if (otpError) {
-          setError(otpError);
+        const { error: firebaseError } = await firebasePhone.sendOtp(fullPhone);
+        
+        if (firebaseError) {
+          setError(firebaseError);
         } else {
-          setSuccessMessage(`Verification code sent via WhatsApp to ${fullPhone}`);
+          setSuccessMessage(`Verification code sent via SMS to ${fullPhone}`);
           setStep('otp');
         }
       }
@@ -212,33 +228,60 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
     setIsLoading(true);
 
     try {
-      const contact = method === 'email' ? email : `+1${phone}`;
-      
-      if (mode === 'signup') {
-        const { error: verifyError } = await authApi.verifyOtpSignup({
-          contact,
-          type: method!,
-          otp,
-          name: getFullName(),
-          username: username.toLowerCase().trim(),
-        });
+      if (method === 'phone') {
+        // Firebase phone auth verification
+        const { idToken, error: firebaseError } = await firebasePhone.verifyOtp(otp);
         
+        if (firebaseError || !idToken) {
+          setError(firebaseError || 'Verification failed');
+          setIsLoading(false);
+          return;
+        }
+
+        // Exchange Firebase token for Supabase session
+        const { error: verifyError } = await authApi.verifyFirebasePhone({
+          firebaseIdToken: idToken,
+          authAction: mode === 'signup' ? 'signup' : 'login',
+          name: mode === 'signup' ? getFullName() : undefined,
+          username: mode === 'signup' ? username.toLowerCase().trim() : undefined,
+          password: mode === 'signup' ? password : undefined,
+        });
+
         if (verifyError) {
           setError(verifyError);
         } else {
           onSuccess();
         }
       } else {
-        const { error: verifyError } = await authApi.verifyOtpLogin({
-          contact,
-          type: method!,
-          otp,
-        });
+        // Email OTP verification (unchanged)
+        const contact = email;
         
-        if (verifyError) {
-          setError(verifyError);
+        if (mode === 'signup') {
+          const { error: verifyError } = await authApi.verifyOtpSignup({
+            contact,
+            type: 'email',
+            otp,
+            name: getFullName(),
+            username: username.toLowerCase().trim(),
+          });
+          
+          if (verifyError) {
+            setError(verifyError);
+          } else {
+            onSuccess();
+          }
         } else {
-          onSuccess();
+          const { error: verifyError } = await authApi.verifyOtpLogin({
+            contact,
+            type: 'email',
+            otp,
+          });
+          
+          if (verifyError) {
+            setError(verifyError);
+          } else {
+            onSuccess();
+          }
         }
       }
     } catch (err) {
@@ -279,7 +322,16 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
 
   const handleResendOtp = async () => {
     setOtp('');
-    await handleSendOtp();
+    if (method === 'phone') {
+      // Re-setup reCAPTCHA and resend via Firebase
+      firebasePhone.resetRecaptcha();
+      setTimeout(() => {
+        firebasePhone.setupRecaptcha('recaptcha-container');
+        setTimeout(() => handleSendOtp(), 500);
+      }, 300);
+    } else {
+      await handleSendOtp();
+    }
   };
 
   // Animation variants
@@ -387,8 +439,8 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
               className="w-full h-14 text-base font-medium rounded-2xl border-2 border-border hover:bg-muted/50 flex items-center justify-center gap-3 transition-all duration-200"
               onClick={() => handleMethodSelect('phone')}
             >
-              <MessageCircle className="w-5 h-5 text-green-500" />
-              <span>Continue with WhatsApp</span>
+              <Smartphone className="w-5 h-5 text-primary" />
+              <span>Continue with Phone</span>
             </Button>
           </motion.div>
 
@@ -492,8 +544,8 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
               className="w-full h-14 text-base font-medium rounded-2xl border-2 border-border hover:bg-muted/50 flex items-center justify-center gap-3 transition-all duration-200"
               onClick={() => handleMethodSelect('phone')}
             >
-              <MessageCircle className="w-5 h-5 text-green-500" />
-              <span>Sign in with WhatsApp</span>
+              <Smartphone className="w-5 h-5 text-primary" />
+              <span>Sign in with Phone</span>
             </Button>
           </motion.div>
 
@@ -649,7 +701,7 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
             </div>
           ) : (
             <div className="space-y-2">
-              <Label htmlFor="phone" className="text-sm font-medium">WhatsApp Number</Label>
+              <Label htmlFor="phone" className="text-sm font-medium">Phone Number</Label>
               <div className="flex gap-2">
                 <div className="flex items-center justify-center px-4 bg-muted/50 rounded-xl text-muted-foreground font-medium h-12">
                   +1
@@ -1130,6 +1182,9 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
           )}
         </button>
       </motion.div>
+      
+      {/* Firebase reCAPTCHA container (invisible) */}
+      <div id="recaptcha-container" ref={recaptchaContainerRef} />
     </div>
   );
 };
