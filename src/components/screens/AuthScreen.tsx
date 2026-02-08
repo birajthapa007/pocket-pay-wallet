@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Shield, Loader2, Mail, Phone, ArrowLeft, KeyRound, UserPlus, Zap, CreditCard, TrendingUp, Send, Fingerprint } from 'lucide-react';
+import { Shield, Loader2, Mail, Phone, ArrowLeft, KeyRound, UserPlus, Zap, CreditCard, TrendingUp, Send, Fingerprint, MessageCircle } from 'lucide-react';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { authApi } from '@/services/api';
 
@@ -149,7 +149,7 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
         if (otpError) {
           setError(otpError);
         } else {
-          setSuccessMessage(`Verification code sent to ${fullPhone}`);
+          setSuccessMessage(`Verification code sent via WhatsApp to ${fullPhone}`);
           setStep('otp');
         }
       }
@@ -387,8 +387,8 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
               className="w-full h-14 text-base font-medium rounded-2xl border-2 border-border hover:bg-muted/50 flex items-center justify-center gap-3 transition-all duration-200"
               onClick={() => handleMethodSelect('phone')}
             >
-              <Phone className="w-5 h-5 text-muted-foreground" />
-              <span>Continue with Phone</span>
+              <MessageCircle className="w-5 h-5 text-green-500" />
+              <span>Continue with WhatsApp</span>
             </Button>
           </motion.div>
 
@@ -492,8 +492,8 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
               className="w-full h-14 text-base font-medium rounded-2xl border-2 border-border hover:bg-muted/50 flex items-center justify-center gap-3 transition-all duration-200"
               onClick={() => handleMethodSelect('phone')}
             >
-              <Phone className="w-5 h-5 text-muted-foreground" />
-              <span>Sign in with Phone</span>
+              <MessageCircle className="w-5 h-5 text-green-500" />
+              <span>Sign in with WhatsApp</span>
             </Button>
           </motion.div>
 
@@ -649,7 +649,7 @@ const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
             </div>
           ) : (
             <div className="space-y-2">
-              <Label htmlFor="phone" className="text-sm font-medium">Phone Number</Label>
+              <Label htmlFor="phone" className="text-sm font-medium">WhatsApp Number</Label>
               <div className="flex gap-2">
                 <div className="flex items-center justify-center px-4 bg-muted/50 rounded-xl text-muted-foreground font-medium h-12">
                   +1

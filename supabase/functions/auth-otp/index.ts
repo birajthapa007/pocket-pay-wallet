@@ -39,20 +39,24 @@ function generateOtp(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Send SMS via Twilio
-async function sendSmsTwilio(to: string, body: string): Promise<{ success: boolean; error?: string }> {
+// Send OTP via Twilio WhatsApp
+async function sendWhatsAppTwilio(to: string, body: string): Promise<{ success: boolean; error?: string }> {
   const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
   const authToken = Deno.env.get("TWILIO_AUTH_TOKEN");
   const fromNumber = Deno.env.get("TWILIO_PHONE_NUMBER");
 
   if (!accountSid || !authToken || !fromNumber) {
     console.error("Twilio credentials not configured");
-    return { success: false, error: "SMS service not configured" };
+    return { success: false, error: "WhatsApp service not configured" };
   }
 
   try {
     const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
     const credentials = btoa(`${accountSid}:${authToken}`);
+
+    // Prefix both To and From with 'whatsapp:' for WhatsApp delivery
+    const whatsappTo = to.startsWith("whatsapp:") ? to : `whatsapp:${to}`;
+    const whatsappFrom = fromNumber.startsWith("whatsapp:") ? fromNumber : `whatsapp:${fromNumber}`;
 
     const response = await fetch(url, {
       method: "POST",
@@ -61,8 +65,8 @@ async function sendSmsTwilio(to: string, body: string): Promise<{ success: boole
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({
-        To: to,
-        From: fromNumber,
+        To: whatsappTo,
+        From: whatsappFrom,
         Body: body,
       }),
     });
@@ -70,15 +74,15 @@ async function sendSmsTwilio(to: string, body: string): Promise<{ success: boole
     const data = await response.json();
 
     if (!response.ok) {
-      console.error("Twilio API error:", data);
-      return { success: false, error: data.message || "Failed to send SMS" };
+      console.error("Twilio WhatsApp API error:", data);
+      return { success: false, error: data.message || "Failed to send WhatsApp message" };
     }
 
-    console.log(`SMS sent successfully to ${to}, SID: ${data.sid}`);
+    console.log(`WhatsApp OTP sent successfully to ${to}, SID: ${data.sid}`);
     return { success: true };
   } catch (err) {
-    console.error("Twilio send error:", err);
-    return { success: false, error: "Failed to send SMS" };
+    console.error("Twilio WhatsApp send error:", err);
+    return { success: false, error: "Failed to send WhatsApp message" };
   }
 }
 
@@ -275,27 +279,27 @@ serve(async (req: Request): Promise<Response> => {
 
       // Send the code via the appropriate channel
       if (channel === 'sms') {
-        const smsBody = `Your Pocket Pay verification code is: ${code}. It expires in 30 minutes. Don't share this code with anyone.`;
-        const smsResult = await sendSmsTwilio(contactPhone!, smsBody);
+        const messageBody = `Your Pocket Pay verification code is: ${code}. It expires in 30 minutes. Don't share this code with anyone.`;
+        const whatsappResult = await sendWhatsAppTwilio(contactPhone!, messageBody);
 
-        if (!smsResult.success) {
+        if (!whatsappResult.success) {
           // Delete the OTP since we couldn't deliver it
           if (insertedOtp?.id) {
             await supabase.from("otp_codes").delete().eq("id", insertedOtp.id);
           }
           return new Response(
-            JSON.stringify({ error: smsResult.error || "Failed to send SMS. Please try again." }),
+            JSON.stringify({ error: whatsappResult.error || "Failed to send WhatsApp message. Please try again." }),
             { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
 
-        console.log(`OTP SMS sent successfully to ${contactPhone}, action: ${authAction}`);
+        console.log(`OTP WhatsApp sent successfully to ${contactPhone}, action: ${authAction}`);
 
         return new Response(
           JSON.stringify({
             success: true,
-            message: `Verification code sent to ${contactPhone}`,
-            sms_sent: true,
+            message: `Verification code sent via WhatsApp to ${contactPhone}`,
+            whatsapp_sent: true,
           }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
