@@ -39,11 +39,12 @@ function generateOtp(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Send OTP via Twilio WhatsApp
-async function sendWhatsAppTwilio(to: string, body: string): Promise<{ success: boolean; error?: string }> {
+// Send OTP via Twilio WhatsApp using Content Template
+async function sendWhatsAppTwilio(to: string, otpCode: string): Promise<{ success: boolean; error?: string }> {
   const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
   const authToken = Deno.env.get("TWILIO_AUTH_TOKEN");
   const fromNumber = Deno.env.get("TWILIO_PHONE_NUMBER");
+  const contentSid = Deno.env.get("TWILIO_CONTENT_SID") || "HX229f5a04fd0510ce1b071852155d3e75";
 
   if (!accountSid || !authToken || !fromNumber) {
     console.error("Twilio credentials not configured");
@@ -67,7 +68,8 @@ async function sendWhatsAppTwilio(to: string, body: string): Promise<{ success: 
       body: new URLSearchParams({
         To: whatsappTo,
         From: whatsappFrom,
-        Body: body,
+        ContentSid: contentSid,
+        ContentVariables: JSON.stringify({ "1": otpCode }),
       }),
     });
 
@@ -279,8 +281,7 @@ serve(async (req: Request): Promise<Response> => {
 
       // Send the code via the appropriate channel
       if (channel === 'sms') {
-        const messageBody = `Your Pocket Pay verification code is: ${code}. It expires in 30 minutes. Don't share this code with anyone.`;
-        const whatsappResult = await sendWhatsAppTwilio(contactPhone!, messageBody);
+        const whatsappResult = await sendWhatsAppTwilio(contactPhone!, code);
 
         if (!whatsappResult.success) {
           // Delete the OTP since we couldn't deliver it
