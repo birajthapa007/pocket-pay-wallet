@@ -328,8 +328,20 @@ export function useDeclineRequest() {
     mutationFn: (requestId: string) => requestsApi.decline(requestId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['money-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['wallet-summary'] });
       toast({
         title: "Request declined",
+      });
+    },
+    onError: (error: Error) => {
+      // Refetch to sync UI with actual state (request may already be processed)
+      queryClient.invalidateQueries({ queryKey: ['money-requests'] });
+      toast({
+        title: "Could not decline request",
+        description: error.message?.includes('already processed') 
+          ? "This request was already processed." 
+          : error.message,
+        variant: "destructive",
       });
     },
   });
